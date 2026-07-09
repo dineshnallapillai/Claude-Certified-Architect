@@ -10,14 +10,14 @@ Custom slash commands are user-defined shortcuts that execute predefined prompts
 
 ```
 .claude/commands/              ← Project-level (shared via git)
-├── review.md                  ← /project:review
-├── deploy-check.md            ← /project:deploy-check
-└── generate-tests.md          ← /project:generate-tests
+├── review.md                  ← /review
+├── deploy-check.md            ← /deploy-check
+└── generate-tests.md          ← /generate-tests
 
 ~/.claude/commands/            ← User-level (personal)
-├── explain.md                 ← /user:explain
-├── refactor.md                ← /user:refactor
-└── quick-test.md              ← /user:quick-test
+├── explain.md                 ← /explain
+├── refactor.md                ← /refactor
+└── quick-test.md              ← /quick-test
 ```
 
 ### Command File Format
@@ -53,7 +53,7 @@ Include:
 - Edge cases to be aware of
 ```
 
-Usage: `/user:explain the useEffect cleanup pattern in React`
+Usage: `/explain the useEffect cleanup pattern in React`
 
 ### Skills (Built-in Commands)
 
@@ -157,20 +157,21 @@ Report: READY TO DEPLOY or BLOCKERS FOUND (with details).
 ### Command Discovery
 
 ```
-/project:<name>    → .claude/commands/<name>.md (project commands)
-/user:<name>       → ~/.claude/commands/<name>.md (personal commands)
+Type /              → Shows all available commands (project + user)
+Type /re            → Filters to commands matching "re" (e.g., /review, /refactor)
 ```
 
-- Tab completion available for discovering commands
+- Commands are invoked simply by name: `/review`, `/explain`, `/deploy-check`
 - Commands are automatically discovered from the filesystem
 - No registration needed — just create the file
-- Commands can be nested in subdirectories using colon separators:
+- If a project command and user command share the same name, the project command takes precedence (or the user disambiguates from the picker)
+- Commands can be nested in subdirectories:
 
 ```
-.claude/commands/db/migrate.md     → /project:db:migrate
-.claude/commands/db/seed.md        → /project:db:seed
-.claude/commands/api/generate.md   → /project:api:generate
-~/.claude/commands/git/squash.md   → /user:git:squash
+.claude/commands/db/migrate.md     → /db:migrate
+.claude/commands/db/seed.md        → /db:seed
+.claude/commands/api/generate.md   → /api:generate
+~/.claude/commands/git/squash.md   → /git:squash
 ```
 
 ### Naming Conventions
@@ -188,7 +189,7 @@ Report: READY TO DEPLOY or BLOCKERS FOUND (with details).
 Refactor $ARGUMENTS to improve readability and reduce complexity.
 
 <!-- Usage -->
-/project:refactor the authentication middleware
+/refactor the authentication middleware
 
 <!-- Claude receives -->
 Refactor the authentication middleware to improve readability and reduce complexity.
@@ -254,7 +255,7 @@ Report pass/fail for each item with details.
 ```
 
 - Committed to git → all team members have it
-- Invoked explicitly → `/project:pr-review`
+- Invoked explicitly → `/pr-review`
 - Consistent → same checklist every time
 
 ### Scenario 2
@@ -277,7 +278,7 @@ Add a body with bullet points if changes are complex.
 
 **A:**
 - **CLAUDE.md:** Review criteria are ALWAYS active. Claude applies them automatically whenever reviewing code, even if not explicitly asked.
-- **Slash command:** Review criteria are applied ON DEMAND. Only triggered when user types `/project:review`.
+- **Slash command:** Review criteria are applied ON DEMAND. Only triggered when user types `/review`.
 
 Use CLAUDE.md for rules that should ALWAYS be followed (conventions, constraints). Use commands for workflows that are explicitly triggered (reviews, deployments, generations).
 
@@ -301,8 +302,9 @@ Use CLAUDE.md for rules that should ALWAYS be followed (conventions, constraints
 ```
 COMMAND LOCATIONS
 ━━━━━━━━━━━━━━━━
-Project: .claude/commands/<name>.md → /project:<name>
-User:    ~/.claude/commands/<name>.md → /user:<name>
+Project: .claude/commands/<name>.md → /<name>
+User:    ~/.claude/commands/<name>.md → /<name>
+Discovery: Type / to see all, type letters to filter
 
 FILE FORMAT
 ━━━━━━━━━━━
@@ -318,8 +320,8 @@ Project/PR:       /init, /review, /loop
 
 SUBDIRECTORY COMMANDS
 ━━━━━━━━━━━━━━━━━━━━━
-.claude/commands/db/migrate.md → /project:db:migrate
-~/.claude/commands/git/squash.md → /user:git:squash
+.claude/commands/db/migrate.md → /db:migrate
+~/.claude/commands/git/squash.md → /git:squash
 
 WHEN TO USE WHAT
 ━━━━━━━━━━━━━━━━

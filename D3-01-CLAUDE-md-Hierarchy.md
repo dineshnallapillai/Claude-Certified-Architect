@@ -12,15 +12,16 @@
 LOADING ORDER (all are loaded, not overriding):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-~/.claude/CLAUDE.md                    ← User global (all projects)
+~/.claude/CLAUDE.md                    ← User global (personal, all projects)
     │
-    ├── /project/CLAUDE.md             ← Project root (shared via git)
+    ├── /project/CLAUDE.md             ← Project root (team-shared, committed)
     │       │
-    │       ├── /project/src/CLAUDE.md ← Directory-specific
+    │       ├── /project/CLAUDE.local.md ← Project local (personal, gitignored)
+    │       │
+    │       ├── /project/src/CLAUDE.md ← Directory-specific (deeper = more specific)
     │       │
     │       └── /project/tests/CLAUDE.md ← Directory-specific
     │
-    └── /project/.claude/CLAUDE.md     ← Project local (not committed)
 ```
 
 ### Hierarchy Behavior
@@ -29,8 +30,8 @@ LOADING ORDER (all are loaded, not overriding):
 |-------|----------|---------|-------------|
 | **User** | `~/.claude/CLAUDE.md` | No | Always |
 | **Project Root** | `./CLAUDE.md` | Yes (git) | When in this project |
+| **Project Local** | `./CLAUDE.local.md` | No (gitignored) | When in this project |
 | **Subdirectory** | `./src/CLAUDE.md` | Yes (git) | When working in that directory |
-| **Local** | `./.claude/CLAUDE.md` | No | When in this project |
 
 ### Key Principles
 
@@ -112,7 +113,7 @@ LOADING ORDER (all are loaded, not overriding):
 ### Pattern 4: Local CLAUDE.md for Machine-Specific Config
 
 ```markdown
-# .claude/CLAUDE.md (not committed)
+# CLAUDE.local.md (gitignored, not committed)
 
 ## Local Environment
 - Database runs on localhost:5433 (non-standard port)
@@ -132,7 +133,7 @@ LOADING ORDER (all are loaded, not overriding):
 | Tech stack & conventions | Project CLAUDE.md | Everyone needs to know |
 | Team-specific rules | Project CLAUDE.md | Consistency across team |
 | Personal preferences | User ~/.claude/CLAUDE.md | Only for you |
-| Machine-specific config | .claude/CLAUDE.md (local) | Varies per machine |
+| Machine-specific config | CLAUDE.local.md (gitignored) | Varies per machine |
 | Directory-specific rules | Subdirectory CLAUDE.md | Context-relevant only |
 | Ephemeral task details | Memory/Tasks (not CLAUDE.md) | Not for every session |
 
@@ -152,9 +153,9 @@ LOADING ORDER (all are loaded, not overriding):
 | 2000-5000 tokens | Getting large, every call costs more |
 | 5000+ tokens | Consider splitting into subdirectory files |
 
-### The `#import` Directive
+### The `@` Import Syntax
 
-CLAUDE.md files support an `#import` directive that allows including other markdown files. This enables modular management of large instruction sets:
+CLAUDE.md files support an `@path` import syntax that allows including other files. This enables modular management of large instruction sets:
 
 ```markdown
 # CLAUDE.md (project root)
@@ -162,22 +163,23 @@ CLAUDE.md files support an `#import` directive that allows including other markd
 ## Core Project Info
 - TypeScript + Node.js 20
 
-#import ./rules/security.md
-#import ./rules/testing.md
-#import ./rules/api-conventions.md
+@rules/security.md
+@rules/testing.md
+@rules/api-conventions.md
 ```
 
-**Key points about `#import`:**
-- Path is relative to the file containing the directive
-- Imported files are inlined at the point of the `#import` statement
-- Useful for splitting large instruction sets into focused files
-- Keeps the main CLAUDE.md concise while referencing detailed rules
-- Imported files can themselves contain `#import` directives (nested imports)
+**Key points about `@` imports:**
+- Both relative and absolute paths are supported
+- Relative paths resolve relative to the file containing the import (not the working directory)
+- Imports can nest recursively up to 4 hops deep
+- Import parsing automatically skips Markdown code spans and fenced code blocks
+- To mention a path WITHOUT importing it, wrap it in backticks: `@README` stays literal
+- First time Claude Code encounters external imports in a project, user sees an approval dialog
 
 **Example directory structure:**
 ```
 project/
-├── CLAUDE.md                    ← Main file with #import directives
+├── CLAUDE.md                    ← Main file with @ imports
 └── rules/
     ├── security.md              ← Security rules
     ├── testing.md               ← Testing conventions
@@ -190,7 +192,7 @@ Claude Code looks for CLAUDE.md files:
 - In the current working directory and all parent directories up to project root
 - In `~/.claude/` for user-level instructions
 - In subdirectories when Claude accesses files there
-- The `.claude/` directory variant is for local-only instructions
+- `CLAUDE.local.md` in any directory is the personal/gitignored variant (appended after that directory's `CLAUDE.md`)
 
 ---
 
@@ -202,7 +204,7 @@ Claude Code looks for CLAUDE.md files:
 WHO CAN MODIFY → TRUST LEVEL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ~/.claude/CLAUDE.md       → Only you (highest trust)
-.claude/CLAUDE.md (local) → Only you (high trust)
+./CLAUDE.local.md         → Only you (high trust, gitignored)
 ./CLAUDE.md (git)         → Any project contributor (review in PRs)
 ./subdir/CLAUDE.md (git)  → Any project contributor (review in PRs)
 ```
@@ -286,8 +288,8 @@ CLAUDE.md HIERARCHY
 ━━━━━━━━━━━━━━━━━━━
 ~/.claude/CLAUDE.md         → Personal (all projects)
 ./CLAUDE.md                 → Project root (git-tracked, team-shared)
+./CLAUDE.local.md           → Project local (personal, gitignored)
 ./subdir/CLAUDE.md          → Directory-specific (git-tracked)
-./.claude/CLAUDE.md         → Project local (NOT committed)
 
 BEHAVIOR
 ━━━━━━━━
@@ -320,11 +322,11 @@ Total loaded: < 3000 tokens target
 
 ---
 
-## Pattern 4: Modular CLAUDE.md with @import Directive
+## Pattern 4: Modular CLAUDE.md with @ Imports
 
-The **@import** directive lets you include external rule files, keeping CLAUDE.md modular and composable.
+The **@path** import syntax lets you include external rule files, keeping CLAUDE.md modular and composable.
 
-### @import Syntax
+### @ Import Syntax
 
 ```markdown
 # Root CLAUDE.md
@@ -333,9 +335,9 @@ The **@import** directive lets you include external rule files, keeping CLAUDE.m
 - Node.js 18, TypeScript, Express
 
 ## Conventions
-@import .claude/rules/api-conventions.md
-@import .claude/rules/database-conventions.md
-@import .claude/rules/testing-conventions.md
+@.claude/rules/api-conventions.md
+@.claude/rules/database-conventions.md
+@.claude/rules/testing-conventions.md
 ```
 
 **File structure:**
@@ -349,25 +351,27 @@ project/
     └── deployment-conventions.md          (imported when relevant)
 ```
 
-### @import Resolution Rules
+### @ Import Resolution Rules
 
-| Rule | Example | Valid? |
-|------|---------|--------|
-| **Relative paths only** | `@import .claude/rules/api.md` | ✓ Yes |
-| **Absolute paths** | `@import /home/user/rules/api.md` | ✗ No |
-| **Directory imports** | `@import .claude/rules/` | ✗ No (files only) |
-| **Recursive imports** | `api.md` imports `database.md` imports `api.md` | ✗ No (circular) |
-| **Comments allowed** | `@import .claude/rules/api.md  # API patterns` | ✓ Yes |
+| Rule | Example | Behavior |
+|------|---------|----------|
+| **Relative paths** | `@.claude/rules/api.md` | Resolves relative to the containing file |
+| **Absolute paths** | `@/home/user/rules/api.md` | Supported |
+| **Nesting depth** | File A imports B imports C imports D | Maximum 4 hops deep |
+| **Escaping** | `` `@README` `` (in backticks) | Stays literal, NOT imported |
+| **Code blocks** | `@path` inside fenced code blocks | NOT imported (auto-skipped) |
+| **Circular imports** | `api.md` imports `database.md` imports `api.md` | Detected and skipped |
 
-### @import Behavior
+### @ Import Behavior
 
 1. Claude Code **finds and loads** each imported file
-2. Content is **merged inline** at the @import directive location
+2. Content is **merged inline** at the `@path` location
 3. Import order is **preserved** (file 1, then file 2, then file 3)
 4. **Duplicates** across imports are okay (no deduplication)
-5. **Circular imports** cause an error and are skipped
+5. **Circular imports** are detected and skipped
+6. **Nesting** is supported up to 4 levels deep
 
-### Three @import Organization Patterns
+### Three @ Import Organization Patterns
 
 #### Pattern 4a: By Area (Recommended)
 
@@ -378,10 +382,10 @@ Organize rules by development area:
 ## Project Context
 [general setup]
 
-@import .claude/rules/api-conventions.md
-@import .claude/rules/database-conventions.md
-@import .claude/rules/frontend-conventions.md
-@import .claude/rules/devops-conventions.md
+@.claude/rules/api-conventions.md
+@.claude/rules/database-conventions.md
+@.claude/rules/frontend-conventions.md
+@.claude/rules/devops-conventions.md
 ```
 
 **When to use:** Teams with distinct layers/areas with different conventions
@@ -394,13 +398,13 @@ Organize rules by type (coding, testing, deployment):
 # Root CLAUDE.md
 
 ## Coding Standards
-@import .claude/rules/coding-standards.md
+@.claude/rules/coding-standards.md
 
 ## Testing
-@import .claude/rules/testing-standards.md
+@.claude/rules/testing-standards.md
 
 ## Deployment
-@import .claude/rules/deployment-standards.md
+@.claude/rules/deployment-standards.md
 ```
 
 **When to use:** Conventions are spread across multiple areas
@@ -412,21 +416,21 @@ Each subdirectory loads only relevant rules:
 ```markdown
 # /src/api/CLAUDE.md
 ## API Module
-@import ../../.claude/rules/api-conventions.md
-@import ../../.claude/rules/testing-standards.md
+@../../.claude/rules/api-conventions.md
+@../../.claude/rules/testing-standards.md
 ```
 
 ```markdown
 # /src/database/CLAUDE.md
 ## Database Module
-@import ../../.claude/rules/database-conventions.md
-@import ../../.claude/rules/migration-conventions.md
-@import ../../.claude/rules/testing-standards.md
+@../../.claude/rules/database-conventions.md
+@../../.claude/rules/migration-conventions.md
+@../../.claude/rules/testing-standards.md
 ```
 
 **When to use:** Reduce noise by loading only relevant rules per area
 
-### @import Example: Full Workflow
+### @ Import Example: Full Workflow
 
 **Root CLAUDE.md:**
 ```markdown
@@ -436,13 +440,13 @@ Each subdirectory loads only relevant rules:
 Node.js/TypeScript microservices architecture with PostgreSQL, Redis, Kafka.
 
 ## API Conventions
-@import .claude/rules/api-design.md
+@.claude/rules/api-design.md
 
 ## Database Conventions
-@import .claude/rules/database-migrations.md
+@.claude/rules/database-migrations.md
 
 ## Testing Requirements
-@import .claude/rules/testing-standards.md
+@.claude/rules/testing-standards.md
 ```
 
 **.claude/rules/api-design.md:**
@@ -477,7 +481,7 @@ Node.js/TypeScript microservices architecture with PostgreSQL, Redis, Kafka.
 
 ### .claude/rules/ Directory with Path-Scoping
 
-As an alternative to @import, organize rules in **.claude/rules/** with YAML frontmatter for path-scoping:
+As an alternative to @ imports, organize rules in **.claude/rules/** with YAML frontmatter for path-scoping:
 
 ```markdown
 # .claude/rules/api-conventions.md
@@ -492,7 +496,7 @@ paths: ["src/api/**/*", "src/routes/**/*"]
 
 **Benefits:**
 - Rules load only when editing matching files
-- No need to @import in every CLAUDE.md
+- No need to add @ imports in every CLAUDE.md
 - Reduces token load (targeted to file types)
 - Easier to discover rules by browsing .claude/rules/
 
@@ -509,11 +513,11 @@ When editing: src/database/schema.ts
   → Skips: .claude/rules/api-conventions.md ✗
 ```
 
-### When NOT to Use @import
+### When NOT to Use @ Imports
 
-| Scenario | Why Not @import | Use Instead |
-|----------|-----------------|-------------|
-| Machine-specific config | Config differs per developer | `.claude/CLAUDE.md` (local, not committed) |
+| Scenario | Why Not @ Import | Use Instead |
+|----------|------------------|-------------|
+| Machine-specific config | Config differs per developer | `CLAUDE.local.md` (gitignored, not committed) |
 | Personal preferences | Personal, not team standards | `~/.claude/CLAUDE.md` (user home) |
 | Secrets/credentials | Never commit secrets | Environment variables or `.env.local` |
 | Frequently changing | Rules change often | Keep in git, import from stable version |

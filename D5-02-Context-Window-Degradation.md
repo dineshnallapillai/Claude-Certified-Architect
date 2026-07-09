@@ -239,6 +239,100 @@ Fix:
 
 ---
 
+## 5b. Large Codebase Exploration — Task 5.4 (Exam-Critical)
+
+### Scratchpad Files
+
+When sessions are long, **write key findings to files** so they survive context compaction:
+
+```
+PATTERN:
+1. Agent discovers important info (architecture, key classes, flows)
+2. Writes to scratchpad file: scratch/findings.md or NOTES.md
+3. Later iterations reference the scratchpad when context is degraded
+4. Findings persist even after /compact or context summarization
+
+WHY: Context compaction may summarize away specifics (class names, line numbers).
+Scratchpad files are permanent — agent can Read them back anytime.
+```
+
+### The Explore Subagent
+
+The **Explore subagent** isolates verbose discovery output from the main agent:
+
+```
+WITHOUT EXPLORE:                    WITH EXPLORE:
+┌──────────────────────┐           ┌──────────────────────┐
+│ Main Agent           │           │ Main Agent           │
+│ [reads 40 files]     │           │ "Find auth flows"    │──► Explore subagent
+│ [greps 20 patterns]  │           │                      │    [reads 40 files]
+│ [10K tokens of noise]│           │ Receives: 500-token  │◄── [greps 20 patterns]
+│ ← Context FULL       │           │ structured summary   │    [returns summary]
+└──────────────────────┘           └──────────────────────┘
+```
+
+**Key points:**
+- Explore subagent handles verbose discovery (file reads, greps)
+- Returns only a structured summary to the main agent
+- Main agent's context stays clean for coordination/implementation
+- Referenced in exam Task 3.4 (plan mode) and Task 5.4
+
+### /compact Command
+
+Manually triggers context compaction to free space:
+
+```
+WHEN TO USE /compact:
+• Before starting a new phase (investigation → implementation)
+• When degradation signals appear (vague answers, "typical patterns")
+• Proactively at ~75% context capacity
+• After verbose exploration that's now fully processed
+
+WHAT IT DOES:
+• Summarizes prior conversation into condensed form
+• Removes raw tool outputs that have been processed
+• Preserves key decisions and findings
+• Frees context for new work
+```
+
+### Structured State Persistence for Crash Recovery
+
+For multi-agent systems that may crash or need to resume:
+
+```
+CRASH RECOVERY PATTERN:
+1. Each agent exports state to a known file location periodically
+2. Coordinator maintains a MANIFEST tracking all agent states
+3. On crash/resume: load manifest → inject state → continue
+
+MANIFEST EXAMPLE:
+{
+  "agents": {
+    "search-agent": {"status": "completed", "findings": "state/search.json"},
+    "analysis-agent": {"status": "partial", "completed": "papers 1-8", "remaining": "9-15"}
+  }
+}
+
+ON RESUME:
+• Coordinator reads manifest
+• Completed results injected into downstream agents
+• Partial agents restart from checkpoint (not from scratch)
+```
+
+### Combined Strategy for Large Codebases
+
+```
+1. Spawn Explore subagent → isolates verbose discovery
+2. Explore returns structured summary → main context stays clean
+3. Write key findings to scratchpad file → survives compaction
+4. Use /compact if context grows large → free space
+5. Spawn focused subagents for specific questions
+6. Reference scratchpad for consistency
+7. On crash → load manifest → resume from checkpoints
+```
+
+---
+
 ## 6. Anti-Patterns
 
 | Anti-Pattern | Problem | Better Approach |
@@ -249,6 +343,10 @@ Fix:
 | Ignoring degradation signals | Quality silently drops | Monitor and respond to signals |
 | Very long single conversations | Inevitable degradation | Break into sessions, use persistent state |
 | No context budget | Uncontrolled growth | Allocate token budget per category |
+| Exploring in main agent context | Context fills with verbose output | Use Explore subagent |
+| No scratchpad for long sessions | Findings lost to compaction | Write findings to files |
+| No crash recovery plan | Must restart from scratch | Use structured state manifests |
+| Using /compact too late | Quality already degraded | Compact proactively at 75% |
 
 ---
 
@@ -267,17 +365,27 @@ DEGRADATION SIGNALS
 • Contradicts earlier info
 • Re-asks answered questions
 • Violates stated constraints
-• Hallucinate details
+• Hallucinate details ("typical patterns" instead of specific classes)
 • Decreasing response quality
+• References generic patterns instead of discovered specifics
 
 MITIGATION STRATEGIES
 ━━━━━━━━━━━━━━━━━━━━━
 1. Critical info → system prompt
-2. Proactive compaction (before degradation)
+2. Proactive compaction (/compact before degradation)
 3. Truncate large tool results
 4. Strategic repetition of constraints
 5. Budget context allocation
 6. Break long tasks into sessions
+7. Scratchpad files for key findings
+8. Explore subagent for verbose discovery
+
+LARGE CODEBASE EXPLORATION (Task 5.4)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Scratchpad files → write findings to file (survive compaction)
+• Explore subagent → isolates verbose reads/greps, returns summary
+• /compact → manually trigger compaction when context fills
+• Crash recovery → export state to manifest, reload on resume
 
 CONTEXT BUDGETING
 ━━━━━━━━━━━━━━━━━
@@ -293,4 +401,5 @@ PRACTICAL LIMITS
 • Proactive compaction at 75% capacity
 • Tool results: truncate over 3-5K tokens
 • Re-inject constraints every 10 turns
+• Scratchpad when session > 20 iterations
 ```

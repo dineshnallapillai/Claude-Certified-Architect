@@ -487,7 +487,7 @@ except anthropic.APIStatusError as e:
 
 **Question:** An application needs to classify 100,000 customer support tickets per day into 5 categories. Accuracy needs to be >95% but latency must be under 500ms. Which model and what approach?
 
-**Answer:** Use Claude Haiku 3.5 (`claude-haiku-4-5`) for the best latency/cost ratio on simple classification. Enhance accuracy with:
+**Answer:** Use Claude Haiku 4.5 (`claude-haiku-4-5`) for the best latency/cost ratio on simple classification. Enhance accuracy with:
 1. A well-crafted system prompt with few-shot examples
 2. Structured outputs (`output_config.format`) to guarantee valid categories
 3. The Message Batches API for the 100K daily volume (50% cost reduction)

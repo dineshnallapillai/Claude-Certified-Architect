@@ -529,6 +529,99 @@ Then scope tool access: research agents only see `db-read` tools; admin agents s
 
 ---
 
+## 5b. MCP Configuration Scoping (Exam-Critical)
+
+### .mcp.json — Project-Level MCP Servers
+
+The exam guide specifies `.mcp.json` as the **project-level** configuration file for shared MCP servers:
+
+```json
+// .mcp.json (project root, committed to git)
+{
+  "mcpServers": {
+    "jira": {
+      "command": "npx",
+      "args": ["-y", "@community/mcp-jira"],
+      "env": {
+        "JIRA_URL": "${JIRA_URL}",
+        "JIRA_TOKEN": "${JIRA_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+- **Committed to git** → all team members get the same MCP servers
+- **Environment variable expansion** (`${VAR}`) keeps secrets local
+- Tools from ALL configured servers are available simultaneously
+
+### ~/.claude/settings.json — User-Level MCP Servers
+
+Personal or experimental MCP servers go in the user-level config:
+
+```json
+// ~/.claude/settings.json (NOT in version control)
+{
+  "mcpServers": {
+    "my-experiment": {
+      "command": "node",
+      "args": ["/home/me/mcp-prototype/server.js"]
+    }
+  }
+}
+```
+
+- **NOT shared** with teammates
+- Use for testing new servers before proposing to team
+- Use for personal productivity tools
+
+### Scoping Decision
+
+| Server Type | File | Shared? |
+|-------------|------|---------|
+| Team standard (Jira, DB, CI) | `.mcp.json` | Yes (git) |
+| Personal/experimental | `~/.claude/settings.json` | No |
+| Community integrations | `.mcp.json` | Yes (git) |
+
+**Key principle:** Choose existing community MCP servers over custom implementations for standard integrations (Jira, GitHub, Slack). Reserve custom servers for team-specific workflows.
+
+### MCP Resources as Content Catalogs
+
+**Resources** are distinct from tools — they expose DATA that agents can read, reducing exploratory tool calls:
+
+```
+TOOLS = Actions (DO something)
+  search_tickets, create_issue, run_query
+
+RESOURCES = Content Catalogs (SEE what's available)
+  current sprint board, API docs, DB schema
+```
+
+**Why resources matter:**
+- Without resources: Agent must make blind exploratory calls ("What's available?")
+- With resources: Agent sees the catalog upfront and makes targeted requests
+
+```typescript
+server.setRequestHandler("resources/list", async () => ({
+  resources: [
+    {
+      uri: "jira://board/current-sprint",
+      name: "Current Sprint",
+      description: "All tickets in active sprint with status",
+      mimeType: "application/json"
+    },
+    {
+      uri: "db://schema/tables",
+      name: "Database Schema",
+      description: "All tables and relationships",
+      mimeType: "application/json"
+    }
+  ]
+}));
+```
+
+---
+
 ## 6. Anti-Patterns
 
 | Anti-Pattern | Problem | Better Approach |
@@ -539,6 +632,9 @@ Then scope tool access: research agents only see `db-read` tools; admin agents s
 | No health monitoring | Silent failures | Health checks + auto-restart |
 | Overly permissive servers | Security risk | Read-only by default, write only where needed |
 | No error handling in server | Crashes propagate | Catch all exceptions, return structured errors |
+| Building custom for standard integrations | Wasted effort | Use community MCP servers |
+| No resources exposed | Agent makes blind exploratory calls | Expose content catalogs |
+| Personal servers in .mcp.json | Forces experiments on team | Use ~/.claude/settings.json |
 
 ---
 
@@ -551,12 +647,26 @@ Host (Claude Code) → Client (protocol) → Server (tools/resources)
 
 TRANSPORT TYPES
 ━━━━━━━━━━━━━━━
-• stdio: Local processes, stdin/stdout pipes
-• Streamable HTTP: Remote servers, single endpoint (recommended)
-• HTTP+SSE: Legacy remote transport (superseded)
+• stdio: Local processes, stdin/stdout pipes (recommended local)
+• Streamable HTTP: Remote servers (recommended remote)
+• HTTP+SSE: Legacy (deprecated)
 
-CONFIGURATION FORMAT
-━━━━━━━━━━━━━━━━━━━━
+MCP CONFIG SCOPING (EXAM CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+.mcp.json        → Project-level, shared via git (team servers)
+~/.claude/settings.json   → User-level, personal only (experiments)
+
+Tools from ALL servers available simultaneously at connection time.
+Use ${ENV_VAR} for credentials (never hardcode).
+
+TOOLS vs RESOURCES
+━━━━━━━━━━━━━━━━━━
+Tools = DO something (actions Claude calls)
+Resources = SEE what's available (content catalogs)
+Resources reduce exploratory tool calls → agent knows what data exists
+
+CONFIGURATION FORMAT (.mcp.json)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {
   "mcpServers": {
     "<name>": {
@@ -570,13 +680,13 @@ CONFIGURATION FORMAT
 SERVER CAPABILITIES
 ━━━━━━━━━━━━━━━━━━━
 • tools: Functions Claude can call
-• resources: Data Claude can read (URI-based)
+• resources: Data Claude can read (content catalogs)
 • prompts: Template prompts
 • sampling: Server requests LLM help (advanced)
 
-CONFIG LOCATIONS (priority order)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. .claude/settings.local.json  (local, highest priority)
+CONFIG LOCATIONS (general settings priority)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. .claude/settings.local.json  (local, highest)
 2. .claude/settings.json        (project, git-tracked)
 3. ~/.claude/settings.json      (user global)
 
@@ -587,6 +697,7 @@ SECURITY CHECKLIST
 ✓ Read-only access by default
 ✓ Version pinning for servers
 ✓ Audit server code before use
+✓ Community servers preferred over custom
 ✓ Health monitoring
 ✓ Network isolation where possible
 ```

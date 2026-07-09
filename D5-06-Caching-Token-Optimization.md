@@ -163,7 +163,7 @@ def select_model_for_task(task_type, budget_priority):
     MODEL_COSTS = {
         "claude-opus-4-8": {"input": 5, "output": 25},       # $/M tokens
         "claude-sonnet-4-6": {"input": 3, "output": 15},
-        "claude-haiku-4-5": {"input": 0.80, "output": 4},
+        "claude-haiku-4-5": {"input": 1.00, "output": 5},
     }
     
     TASK_MODEL_MAP = {
@@ -230,7 +230,7 @@ import anthropic
 client = anthropic.Anthropic()
 
 # Count tokens for a message
-token_count = client.count_tokens(
+token_count = client.messages.count_tokens(
     model="claude-sonnet-4-6",
     messages=[{"role": "user", "content": "Hello!"}]
 )
@@ -354,8 +354,8 @@ Best: summarize immediately (reduces from 200K accumulated tokens to 20K).
 
 **A:** **Haiku** because:
 - Classification is a simple, well-defined task
-- Haiku input: $0.80/M vs Sonnet $3/M vs Opus $15/M (18x cheaper than Opus)
-- At 1000 tickets/day: Haiku ≈ $0.80/day vs Opus ≈ $15/day
+- Haiku input: $1/M vs Sonnet $3/M vs Opus $5/M (5x cheaper than Opus)
+- At 1000 tickets/day (~1M tokens): Haiku ≈ $1/day vs Opus ≈ $5/day
 - Quality difference for classification is minimal
 - Speed: Haiku is fastest (lowest latency)
 
@@ -390,9 +390,9 @@ PROMPT CACHING
 
 MODEL COST TIERS ($/M tokens input/output)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Haiku:  $0.80 / $4    (simple tasks)
+Haiku:  $1.00 / $5    (simple tasks)
 Sonnet: $3 / $15      (general tasks)
-Opus:   $15 / $75     (complex reasoning)
+Opus:   $5 / $25      (complex reasoning)
 
 TOKEN OPTIMIZATION STRATEGIES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

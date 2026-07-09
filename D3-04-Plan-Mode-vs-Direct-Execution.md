@@ -52,7 +52,7 @@ PLAN MODE                          DIRECT EXECUTION
 
 Entering Plan Mode:
 - Interactive (TUI): Press Shift+Tab to toggle between Plan and Act modes
-- Headless/CI: Use the --plan CLI flag (e.g., `claude --plan "refactor auth"`)
+- Headless/CI: Use `--permission-mode plan` (e.g., `claude --permission-mode plan -p "refactor auth"`)
 ```
 
 ### Plan Structure
@@ -176,7 +176,7 @@ User: "change step 3"         → Claude revises plan
 User: "cancel"                → Abandon plan
 
 Headless/CLI usage:
-$ claude --plan "implement feature X"   → Runs in plan mode non-interactively
+$ claude --permission-mode plan -p "implement feature X"   → Runs in plan mode non-interactively
 ```
 
 ### Plan Mode Constraints
@@ -306,7 +306,7 @@ The key insight: plan mode is a tool for managing complexity. When complexity is
 PLAN MODE
 ━━━━━━━━━
 • Separates thinking from doing
-• Enter: Shift+Tab (toggles Plan/Act in TUI) or --plan flag (CLI/headless)
+• Enter: Shift+Tab (toggles Plan/Act in TUI) or `--permission-mode plan` (CLI/headless)
 • Claude CAN: read, search, analyze
 • Claude CANNOT: write, edit, execute
 • Produces: structured plan document

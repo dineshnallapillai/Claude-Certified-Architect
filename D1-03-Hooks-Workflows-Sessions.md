@@ -274,148 +274,123 @@ Session 2: User returns to continue
 
 ### Subagent Invocation
 
-**Subagents** are autonomous agents spawned by a coordinator agent to handle specialized tasks. The coordinator maintains context and orchestrates subagent execution.
+**Subagents** are autonomous agents spawned by a parent to handle specialized tasks. Each subagent gets **isolated context** — it does NOT inherit the parent's conversation history. The parent must pass all relevant context explicitly in the prompt.
 
-#### Task Tool: Spawning Subagents
+#### Agent Tool: Spawning Subagents
 
-The **Task tool** is how coordinators spawn subagents:
+The **Agent tool** is how Claude Code spawns subagents:
 
 ```python
-# Coordinator agent invokes Task tool to spawn subagent
-response = client.messages.create(
-    model="claude-opus-4-6-20250514",
-    messages=[
-        {"role": "user", "content": "Analyze this PR for security issues"}
-    ],
-    tools=[
-        {
-            "name": "task",
-            "description": "Spawn a subagent to handle a specific task",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "type": {"type": "string", "enum": ["task"]},
-                    "agent_type": {"type": "string", "description": "Type of subagent (e.g., 'security_reviewer')"},
-                    "prompt": {"type": "string", "description": "Task prompt for the subagent"},
-                },
-                "required": ["type", "agent_type", "prompt"]
-            }
-        }
-    ]
+# Claude Code spawns a subagent via the Agent tool
+Agent(
+    description="Analyze PR for security issues",   # Short 3-5 word label
+    prompt="Review the changes in this PR for SQL injection, XSS, and auth bypass vulnerabilities. Report findings as a structured list.",
+    subagent_type="general-purpose",  # Optional: "Explore", "Plan", or custom agent type
+    model="sonnet",                   # Optional: override model (sonnet, opus, haiku)
+    run_in_background=True            # Optional: async execution (default True)
 )
 ```
 
-#### allowedTools Requirement
+**Agent tool parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `description` | Yes | Short 3-5 word task label |
+| `prompt` | Yes | Full instructions for the subagent |
+| `subagent_type` | No | Agent type: "general-purpose", "Explore", "Plan", or custom |
+| `model` | No | Model override: "sonnet", "opus", "haiku" |
+| `isolation` | No | Set to "worktree" for git-isolated execution |
+| `run_in_background` | No | Boolean; default true for async execution |
 
-**CRITICAL:** For a coordinator to spawn subagents, its `allowedTools` configuration MUST include `"task"`:
-
-```python
-# Agent definition for coordinator
-coordinator = {
-    "name": "coordinator",
-    "description": "Orchestrates multi-agent research system",
-    "allowedTools": [
-        "task",           # ← MUST include to spawn subagents
-        "read_document",  # Coordinator's own tools
-        "search_web"
-    ]
-}
-
-# Without "task" in allowedTools, the agent cannot invoke Task tool
-```
+**Custom agent types** are defined in `.claude/agents/*.md` files using frontmatter for configuration (model, tools, etc.) and markdown body for system instructions.
 
 #### Context Passing to Subagents
 
-Subagents receive **isolated context** — they do NOT automatically inherit the coordinator's conversation history. Pass context explicitly:
+Subagents receive **isolated context** — they do NOT automatically inherit the coordinator's conversation history. Pass context explicitly in the prompt:
 
 ```python
-# WRONG: Context not passed
-subagent_prompt = "Analyze this codebase for bugs"
+# WRONG: Context not passed — subagent has no idea what was found before
+Agent(
+    description="Find security bugs",
+    prompt="Analyze this codebase for bugs"
+)
 
 # RIGHT: Context passed explicitly with findings
-web_search_results = "[Search results for 'async patterns']"
-prior_findings = "Found: Memory leak in connection pooling, Race condition in cache invalidation"
-
-subagent_prompt = f"""Analyze this codebase for bugs.
+Agent(
+    description="Find security bugs",
+    prompt="""Analyze this codebase for bugs.
 
 Prior findings from other agents:
-{prior_findings}
+- Memory leak in connection pooling (src/db/pool.ts:42)
+- Race condition in cache invalidation (src/cache/store.ts:118)
 
 Web search context:
-{web_search_results}
+[Search results for 'async patterns in Node.js']
 
-Your task: Identify security-related bugs."""
+Your task: Identify security-related bugs, focusing on auth bypass and injection."""
+)
 ```
 
 **Key patterns:**
-- Include complete findings from prior agents
-- Pass metadata (source URLs, document names, page numbers)
+- Include complete findings from prior agents in the prompt
+- Pass metadata (source URLs, file paths, line numbers)
 - Use structured format (YAML/JSON) for clarity
-- Coordinator must re-inject context on each subagent invocation
+- Parent must re-inject context on each subagent invocation since subagents are stateless
 
 #### Parallel Subagent Spawning
 
-Multiple subagents can be spawned in parallel by emitting multiple Task tool calls in one coordinator response:
+Multiple subagents can be spawned in parallel by emitting multiple Agent tool calls in a single assistant response:
 
 ```python
-# Coordinator response with 3 parallel Task calls
-response = {
-    "role": "assistant",
-    "content": [
-        {
-            "type": "tool_use",
-            "id": "toolu_01",
-            "name": "task",
-            "input": {
-                "agent_type": "search_agent",
-                "prompt": "Search for: async/await patterns in Node.js"
-            }
-        },
-        {
-            "type": "tool_use",
-            "id": "toolu_02",
-            "name": "task",
-            "input": {
-                "agent_type": "document_analyzer",
-                "prompt": "Analyze: Best practices documentation"
-            }
-        },
-        {
-            "type": "tool_use",
-            "id": "toolu_03",
-            "name": "task",
-            "input": {
-                "agent_type": "synthesizer",
-                "prompt": "Synthesize findings (will receive results from above)"
-            }
-        }
-    ]
-}
-# All 3 subagents execute in parallel, results returned together
+# Multiple Agent calls in one response execute concurrently
+Agent(
+    description="Search async patterns",
+    prompt="Search for async/await patterns in the Node.js codebase under src/. Report file paths and line numbers."
+)
+Agent(
+    description="Analyze documentation",
+    prompt="Analyze the best practices documentation in docs/. Summarize key architectural decisions."
+)
+Agent(
+    description="Review test coverage",
+    prompt="Check test coverage for the auth module. Report untested code paths."
+)
+# All 3 execute in parallel; parent is notified as each completes
 ```
+
+**Parallel execution rules:**
+- Independent tasks in a single response run concurrently
+- Parent is notified when each background agent completes
+- Set `run_in_background=False` when you need results before proceeding
+- Dependencies between agents require sequential spawning (wait for one to finish before launching the next)
 
 #### Subagent Return Format
 
-Subagents return structured results to the coordinator:
+Subagents return their **final text as a string** to the parent. The parent receives this as the tool result and can parse or use it as needed:
 
 ```python
-# Subagent returns findings as tool_result
-{
-    "type": "tool_result",
-    "tool_use_id": "toolu_01",
-    "content": json.dumps({
-        "findings": [
-            {
-                "claim": "Async patterns reduce callback nesting",
-                "source": "https://nodejs.org/en/docs/guides/",
-                "confidence": 0.95
-            }
-        ],
-        "coverage": "80% of async patterns covered",
-        "gaps": "Missing: Promise.race() patterns"
-    })
-}
+# Default: subagent returns free-form text
+result = Agent(
+    description="Find bugs",
+    prompt="Find bugs in src/auth/ and report them with file paths and severity.",
+    run_in_background=False
+)
+# result is a string like: "Found 3 bugs:\n1. SQL injection in login.ts:45 (HIGH)..."
+
+# For structured output: instruct the subagent to return JSON in the prompt
+result = Agent(
+    description="Find bugs structured",
+    prompt="""Find bugs in src/auth/. Return ONLY a JSON object:
+{"findings": [{"file": "...", "line": N, "severity": "HIGH|MED|LOW", "description": "..."}]}""",
+    run_in_background=False
+)
+# result is a JSON string that the parent can parse
 ```
+
+**Best practices for return values:**
+- For simple tasks, free-form text is sufficient
+- For multi-agent pipelines, request structured JSON in the prompt so the parent can parse and pass results downstream
+- The parent is responsible for parsing — subagents just return their final message text
+- Trust but verify: an agent's summary describes intent, not necessarily outcome; check actual changes when agents modify files
 
 ### Session State Management
 
@@ -490,29 +465,29 @@ Conversation State:
 
 ### Session Resumption with --resume
 
-**Named sessions** allow resuming prior conversations with context preservation:
+**Sessions are identified by UUIDs** but can have display names set via `-n, --name`. Named sessions allow resuming prior conversations using the interactive picker:
 
 ```bash
-# Start named session
-claude --session research-async "Analyze async patterns in Node.js"
+# Start a session with a display name
+claude -n research-async "Analyze async patterns in Node.js"
 
 # Session ends, context saved
-# Later: resume the session
+# Later: resume using the interactive picker (searches by name)
 claude --resume research-async
 ```
 
 #### How Resumption Works
 
 ```
-Turn 1: Start session "research-async"
-  ├─ Upload codebase context
+Turn 1: Start session with name "research-async"
+  ├─ Session gets UUID (e.g., 94d22606-4a22-463e-aacc-b2be701b9901)
+  ├─ Display name "research-async" shown in picker
   ├─ Ask: "Analyze async patterns"
   └─ Claude: [Analysis + observations]
-      └─ Context saved to .claude/sessions/research-async
 
 Turn 2: Resume session (days/weeks later)
-  ├─ Load context from .claude/sessions/research-async
-  ├─ Messages: [prior conversation]
+  ├─ claude --resume research-async (searches picker by name)
+  ├─ Messages: [prior conversation restored]
   ├─ Ask: "Now check file async-utils.ts"
   └─ Claude: [With prior context about patterns already analyzed]
 ```
@@ -537,28 +512,28 @@ claude --resume research-async "Updated files: src/utils/async.ts (new retry log
 
 Claude then knows to re-analyze specific files rather than relying on stale tool results.
 
-### fork_session for Divergent Exploration
+### --fork-session for Divergent Exploration
 
-**fork_session** creates an independent branch from a shared analysis baseline:
+**--fork-session** is a boolean flag used with `--resume` or `--continue`. It creates a new session ID (copying the full prior context) instead of modifying the original session:
 
 ```bash
 # Initial analysis
-claude --session main-analysis "Analyze refactoring approaches for legacy code"
+claude -n main-analysis "Analyze refactoring approaches for legacy code"
 # Claude explores, provides analysis
 
-# Fork to explore approach A
-claude --fork-session main-analysis branch-a "Explore approach A: microservices"
-# Divergent investigation in isolated context
+# Fork to explore approach A (resume + fork + new name)
+claude --resume main-analysis --fork-session -n branch-a "Explore approach A: microservices"
+# Gets full context from main-analysis, diverges independently
 
-# Fork to explore approach B
-claude --fork-session main-analysis branch-b "Explore approach B: modular monolith"
-# Parallel investigation without interfering
+# Fork to explore approach B (from original, which is untouched)
+claude --resume main-analysis --fork-session -n branch-b "Explore approach B: modular monolith"
+# Another independent fork from the same baseline
 
-# Return to main session to compare both approaches
-claude --resume main-analysis "Compare branch-a and branch-b findings"
+# Return to main session (unmodified by forks)
+claude --resume main-analysis "Compare approaches"
 ```
 
-#### fork_session Use Cases
+#### --fork-session Use Cases
 
 - **A/B testing strategies:** Compare two refactoring approaches in parallel
 - **Risk mitigation:** Explore a risky change in isolation before committing

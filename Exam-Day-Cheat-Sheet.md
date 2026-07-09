@@ -111,7 +111,7 @@ Client → notifications/initialized → Server
   └── project/CLAUDE.md      (project root, shared standards)
        └── project/src/CLAUDE.md  (subdirectory, activates per file path)
 ```
-- `#import ./path/to/file.md` — modular includes
+- `@path/to/file.md` — modular includes (just `@` + path, no keyword)
 - Survives context compaction (treated as system prompt)
 - Subdirectory CLAUDE.md activates when Claude operates on files in that subtree
 
@@ -139,7 +139,7 @@ Client → notifications/initialized → Server
 | `-p` / `--print` | Single-shot mode, stdout output |
 | `--continue` | Resume most recent conversation |
 | `--resume <id>` | Resume specific session by ID |
-| `--max-turns N` | Limit agentic loop iterations |
+| `--max-budget-usd <amount>` | Cap API spending for the invocation |
 | `--output-format json\|text\|stream-json` | Control print mode output |
 | `--dangerously-skip-permissions` | Skip ALL permission checks (CI only!) |
 | `--model <id>` | Override model for session |
@@ -147,7 +147,7 @@ Client → notifications/initialized → Server
 
 ### Custom Commands
 - Location: `.claude/commands/` directory
-- Naming: `commands/db/migrate.md` → `/project:db:migrate`
+- Naming: `commands/db/migrate.md` → `/db:migrate`
 - `$ARGUMENTS` placeholder for user input
 
 ### Built-in Skills

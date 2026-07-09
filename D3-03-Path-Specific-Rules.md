@@ -82,7 +82,7 @@ Path-specific rules allow different Claude behaviors based on which files or dir
     "PreToolUse": [
       {
         "matcher": "Write",
-        "command": "python scripts/check_path_rules.py \"$FILE_PATH\""
+        "command": "python scripts/check_path_rules.py"
       }
     ]
   }
@@ -91,10 +91,10 @@ Path-specific rules allow different Claude behaviors based on which files or dir
 
 ```python
 # scripts/check_path_rules.py
-import sys
-import os
+import json, sys
 
-file_path = sys.argv[1]
+hook_data = json.loads(sys.stdin.read())
+file_path = hook_data.get("tool_input", {}).get("file_path", "")
 
 PROTECTED_PATHS = [
     "/infrastructure/production/",
@@ -180,11 +180,11 @@ All are ADDITIVE — Claude follows all of them.
     "PostToolUse": [
       {
         "matcher": "Write",
-        "command": "bash -c 'if [[ \"$FILE_PATH\" == *.ts ]]; then npx prettier --write \"$FILE_PATH\"; fi'"
+        "command": "bash -c 'INPUT=$(cat); FILE_PATH=$(echo \"$INPUT\" | jq -r '\"'\"'.tool_input.file_path // empty'\"'\"'); if [[ \"$FILE_PATH\" == *.ts ]]; then npx prettier --write \"$FILE_PATH\"; fi'"
       },
       {
         "matcher": "Write",
-        "command": "bash -c 'if [[ \"$FILE_PATH\" == *.py ]]; then black \"$FILE_PATH\"; fi'"
+        "command": "bash -c 'INPUT=$(cat); FILE_PATH=$(echo \"$INPUT\" | jq -r '\"'\"'.tool_input.file_path // empty'\"'\"'); if [[ \"$FILE_PATH\" == *.py ]]; then black \"$FILE_PATH\"; fi'"
       }
     ]
   }
@@ -249,7 +249,7 @@ Hooks:
 {
   "hooks": {
     "PostToolUse": [
-      {"matcher": "Write", "command": "scripts/format_by_path.sh \"$FILE_PATH\""}
+      {"matcher": "Write", "command": "scripts/format_by_path.sh"}
     ]
   }
 }
@@ -316,9 +316,9 @@ Protected: infra/prod, secrets → blocked by hooks
 
 HOOK PATH MATCHING
 ━━━━━━━━━━━━━━━━━━
-$FILE_PATH available in hook commands
-Use bash conditionals: if [[ "$FILE_PATH" == *.ts ]]; then ...
-Or dedicated script that inspects the path
+Hook data delivered via STDIN as JSON
+Parse with: jq -r '.tool_input.file_path // empty'
+Or in Python: json.loads(sys.stdin.read())["tool_input"]["file_path"]
 
 BEST PRACTICES
 ━━━━━━━━━━━━━━

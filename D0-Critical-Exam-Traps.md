@@ -21,19 +21,20 @@
 ## 3. Plan Mode Toggle
 
 **TRAP:** "Type `/plan` to enter plan mode"
-**CORRECT:** Plan mode is toggled with **Shift+Tab** in the interactive TUI. There is no `/plan` slash command. In headless mode, use the `--plan` CLI flag.
+**CORRECT:** Plan mode is toggled with **Shift+Tab** in the interactive TUI. There is no `/plan` slash command. In headless/CLI mode, use `--permission-mode plan`.
 
 ---
 
 ## 4. HTTP Error Codes
 
-**TRAP:** "HTTP 413 means context too long"
+**TRAP:** "HTTP 413 does not exist in the Claude API"
 **CORRECT:**
-- 400 = Invalid request INCLUDING context too long
+- 400 = Invalid request (malformed JSON, invalid parameters)
 - 401 = Invalid API key
+- 413 = Request too large (`request_too_large` — payload exceeds size limits)
 - 429 = Rate limited (retry with backoff)
 - 529 = Overloaded (Anthropic-specific, retry with exponential backoff + jitter)
-There is NO 413 response from the Claude API.
+Note: 413 IS a real API response. Context window overflow (too many tokens) returns 400, NOT 413. The 413 is for raw HTTP payload size.
 
 ---
 
@@ -148,7 +149,7 @@ Additional caching facts:
 project/CLAUDE.md             (project root, always)
 project/src/CLAUDE.md         (only when working in src/)
 ```
-- `#import ./path/file.md` for modular includes
+- `@path/file.md` for modular includes (just `@` followed by path)
 - Survives context compaction (treated as system prompt)
 - Subdirectory files ACTIVATE when Claude operates on files in that subtree
 
@@ -161,8 +162,9 @@ project/src/CLAUDE.md         (only when working in src/)
 
 | Hook | Timing | Can Block? | Use For |
 |------|--------|-----------|---------|
-| PreToolUse | Before execution | YES (exit 2 = block) | Security gates, validation |
+| PreToolUse | Before execution | YES (non-zero exit = block) | Security gates, validation |
 | PostToolUse | After execution | NO (tool already ran) | Formatting, logging, post-processing |
+| Notification | When Claude sends notification | NO | Custom notification routing |
 | Stop | After agent finishes | N/A | Linting, cleanup, notifications |
 
 Only PreToolUse can PREVENT execution. PostToolUse sees the result but cannot undo it.

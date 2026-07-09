@@ -107,7 +107,7 @@ jobs:
         run: |
           git diff origin/main...HEAD | claude -p \
             --output-format json \
-            --max-turns 1 \
+            --max-budget-usd 0.50 \
             --dangerously-skip-permissions \
             "Review this diff for bugs, security issues, and style problems. 
              Output a JSON array of findings with file, line, severity, message."
@@ -122,7 +122,7 @@ NEW_FILES=$(git diff --name-only origin/main...HEAD -- '*.ts' '*.tsx')
 
 for file in $NEW_FILES; do
   claude -p \
-    --max-turns 5 \
+    --max-budget-usd 2.00 \
     --dangerously-skip-permissions \
     --output-format text \
     "Generate comprehensive unit tests for $file. 
@@ -164,9 +164,9 @@ claude -p \
 ### Pattern 5: Controlled Agentic Execution
 
 ```bash
-# Limit agent iterations to prevent runaway execution
+# Limit API spending to prevent runaway costs
 claude -p \
-  --max-turns 10 \
+  --max-budget-usd 5.00 \
   --allowedTools "Read,Grep,Glob,Bash(npm test*)" \
   --dangerously-skip-permissions \
   "Find and fix the failing test in src/utils/parser.test.ts"
@@ -185,10 +185,10 @@ claude -p \
 | `--resume <id>` | | Resume specific session | Interactive/Print |
 | `--model <id>` | | Override model selection | All |
 | `--output-format <fmt>` | | Control output format (text/json/stream-json) | Print only |
-| `--json-schema <path>` | | Validate output against JSON schema | Print only |
-| `--max-turns <n>` | | Limit agentic loop iterations | Print |
-| `--system-prompt <text>` | | Override system prompt entirely | Print only |
-| `--append-system-prompt <text>` | | Append text to system prompt | Print only |
+| `--json-schema <schema>` | | Validate output against inline JSON schema | Print only |
+| `--max-budget-usd <amount>` | | Cap API spending for the invocation | Print |
+| `--system-prompt <text>` | | Override system prompt entirely | All |
+| `--append-system-prompt <text>` | | Append text to system prompt | All |
 | `--allowedTools <tools>` | | Comma-separated tools to allow | All |
 | `--disallowedTools <tools>` | | Comma-separated tools to deny | All |
 | `--add-dir <path>` | | Add additional directory context | All |
@@ -276,7 +276,7 @@ EOF
 # Run with schema validation
 claude -p \
   --output-format json \
-  --json-schema review_schema.json \
+  --json-schema '{"type":"object","properties":{"findings":{"type":"array"}},"required":["findings"]}' \
   "Review this code for bugs. Output JSON with array of findings: {findings: [{file, line, severity, message}, ...]}"
 ```
 
@@ -303,14 +303,14 @@ When `--json-schema` is used, Claude's output must be valid JSON matching the sc
 If Claude's output doesn't match the schema:
 - Exit code = 1 (error)
 - Error message includes validation error details
-- Can be used with `--max-turns` to trigger automatic retry
+- Can be used with `--max-budget-usd` to cap retry costs
 
 ```bash
-# Retry up to 5 times if schema validation fails
+# Cap spending if schema validation triggers retries
 claude -p \
   --output-format json \
-  --json-schema findings.json \
-  --max-turns 5 \
+  --json-schema "$(cat findings.json)" \
+  --max-budget-usd 2.00 \
   "Output JSON findings matching this schema: ..."
 ```
 
@@ -354,7 +354,7 @@ claude -p --dangerously-skip-permissions "Delete all .tmp files and reformat src
 **Critical rules for this flag:**
 - ONLY use in CI/CD or fully automated environments
 - NEVER use interactively on a developer machine
-- Always combine with `--max-turns` to limit blast radius
+- Always combine with `--max-budget-usd` to limit blast radius
 - Requires explicit trust in the prompt (it can do anything)
 - Named "dangerously" intentionally as a deterrent
 
@@ -367,10 +367,10 @@ claude -p --dangerously-skip-permissions "Delete all .tmp files and reformat src
 | Risk | Mitigation |
 |------|-----------|
 | API key exposure | Use secrets management (GitHub Secrets, Vault) |
-| Runaway agents in CI | Always set `--max-turns` |
+| Runaway agents in CI | Always set `--max-budget-usd` |
 | Uncontrolled file modifications | Use `--allowedTools` to restrict tool access |
 | Prompt injection via PR content | Sanitize inputs, limit scope |
-| Cost overruns | Set `--max-turns`, use cheaper models for CI |
+| Cost overruns | Set `--max-budget-usd`, use cheaper models for CI |
 | Unauthorized code execution | Scope permissions with `--allowedTools` |
 
 ### Permission Control in Automation
@@ -379,20 +379,20 @@ claude -p --dangerously-skip-permissions "Delete all .tmp files and reformat src
 # Restrictive: only allow read operations
 claude -p \
   --allowedTools "Read,Grep,Glob" \
-  --max-turns 5 \
+  --max-budget-usd 2.00 \
   "Analyze the architecture of this project"
 
 # Moderate: allow reads + controlled writes
 claude -p \
   --allowedTools "Read,Grep,Glob,Write,Edit" \
   --disallowedTools "Bash" \
-  --max-turns 10 \
+  --max-budget-usd 5.00 \
   "Refactor the utils module to use TypeScript generics"
 
 # Wide open (CI only, with guard rails)
 claude -p \
   --dangerously-skip-permissions \
-  --max-turns 15 \
+  --max-budget-usd 10.00 \
   "Fix all failing tests and ensure the build passes"
 ```
 
@@ -412,7 +412,7 @@ claude -p "Hello"
 
 ### Rate Limiting and Cost Control
 
-- `--max-turns` prevents infinite agentic loops (each turn = one tool use cycle)
+- `--max-budget-usd` prevents runaway costs (caps total API cost for the invocation)
 - Use `--model` to select cost-appropriate models for CI tasks
 - Monitor usage via the JSON output format (`cost_usd` field)
 - Set budget alerts in your Anthropic account
@@ -425,11 +425,11 @@ claude -p "Hello"
 
 **Q:** A developer wants to integrate Claude into a GitHub Actions workflow that automatically reviews PRs for security vulnerabilities. The workflow should output structured findings that can be parsed by another tool. Which combination of flags is most appropriate?
 
-**A:** Use `claude -p --output-format json --max-turns 3 --dangerously-skip-permissions` with the diff piped in:
+**A:** Use `claude -p --output-format json --max-budget-usd 1.00 --dangerously-skip-permissions` with the diff piped in:
 ```bash
 git diff origin/main...HEAD | claude -p \
   --output-format json \
-  --max-turns 3 \
+  --max-budget-usd 1.00 \
   --dangerously-skip-permissions \
   "Review this diff for security vulnerabilities"
 ```
@@ -437,7 +437,7 @@ git diff origin/main...HEAD | claude -p \
 Rationale:
 - `-p` (print mode): non-interactive, outputs to stdout for CI capture
 - `--output-format json`: structured output for downstream parsing
-- `--max-turns 3`: prevents runaway execution (security review needs minimal tool use)
+- `--max-budget-usd 1.00`: caps total spend to prevent runaway costs
 - `--dangerously-skip-permissions`: CI has no interactive user to approve tools
 - Pipe input: passes the diff directly as context
 
@@ -470,19 +470,19 @@ claude --resume auth-002 "Add the refresh token rotation logic"
 
 **Q:** A CI pipeline uses Claude to fix linting errors automatically. In a recent incident, Claude entered a loop — fixing one lint error introduced another, consuming excessive API credits. What is the primary mechanism to prevent this?
 
-**A:** Use `--max-turns` to cap the number of agentic loop iterations:
+**A:** Use `--max-budget-usd` to cap total API spending for the invocation:
 
 ```bash
 claude -p \
-  --max-turns 5 \
+  --max-budget-usd 2.00 \
   --dangerously-skip-permissions \
   "Fix all ESLint errors in src/"
 ```
 
-`--max-turns 5` means Claude can use at most 5 tool calls before being forced to stop. This prevents infinite fix-break-fix loops. Additionally:
+`--max-budget-usd 2.00` means Claude will stop once $2.00 in API costs has been consumed. This prevents infinite fix-break-fix loops from running up large bills. Additionally:
 - Monitor the `cost_usd` field in JSON output for budget alerting
 - Use `--allowedTools` to restrict which tools are available (e.g., only Edit, not Bash)
-- The exit code will still be 0 if Claude stopped due to max-turns (it completed normally)
+- The exit code will still be 0 if Claude stopped due to budget cap (it completed normally)
 
 ### Scenario 5: Combining Flags for Minimal-Privilege CI
 
@@ -494,7 +494,7 @@ claude -p \
 claude -p \
   --allowedTools "Read,Grep,Glob" \
   --disallowedTools "Bash,Write,Edit" \
-  --max-turns 10 \
+  --max-budget-usd 5.00 \
   --output-format json \
   "Review src/ for code quality issues and report findings"
 ```
@@ -512,7 +512,7 @@ Key points:
 | Anti-Pattern | Problem | Better Approach |
 |-------------|---------|-----------------|
 | Using `--dangerously-skip-permissions` locally | Removes all safety guardrails on your machine | Only use in CI; use `--allowedTools` for local automation |
-| No `--max-turns` in CI | Agent can loop indefinitely, consuming credits | Always set a reasonable cap (3-15 depending on task) |
+| No `--max-budget-usd` in CI | Agent can loop indefinitely, consuming credits | Always set a reasonable dollar cap ($0.50-$10.00 depending on task) |
 | `--system-prompt` when you mean `--append-system-prompt` | Destroys default behaviors and tool instructions | Use `--append-system-prompt` unless you need full control |
 | Hardcoding API keys in CI scripts | Key exposure in logs or version control | Use secrets management (env vars from secure store) |
 | Using interactive mode in CI | Pipeline hangs waiting for user input | Always use `-p` (print mode) in automation |
@@ -541,9 +541,9 @@ KEY FLAGS
 --resume <id>                   → Resume specific session
 --model <id>                    → Override model
 --output-format text|json|stream-json → Output control (print mode)
---max-turns <n>                 → Limit agentic iterations
---system-prompt <text>          → Replace system prompt (print only)
---append-system-prompt <text>   → Add to system prompt (print only)
+--max-budget-usd <amount>       → Limit API spending (dollar amount)
+--system-prompt <text>          → Replace system prompt (all modes)
+--append-system-prompt <text>   → Add to system prompt (all modes)
 --allowedTools <tools>          → Comma-separated allow list
 --disallowedTools <tools>       → Comma-separated deny list
 --add-dir <path>                → Add directory to context
@@ -560,7 +560,7 @@ CI/CD CHECKLIST
 ━━━━━━━━━━━━━━━
 [ ] Use -p (print mode) — never interactive in CI
 [ ] Set ANTHROPIC_API_KEY via secrets management
-[ ] Set --max-turns to prevent runaway agents
+[ ] Set --max-budget-usd to prevent runaway costs
 [ ] Use --output-format json for structured output
 [ ] Use --allowedTools for least-privilege access
 [ ] Use --dangerously-skip-permissions only in trusted CI
@@ -581,7 +581,7 @@ COMMON CI PATTERNS
 git diff | claude -p --output-format json "Review this diff"
 
 # Test generation
-claude -p --max-turns 10 --dangerously-skip-permissions "Write tests for src/new.ts"
+claude -p --max-budget-usd 5.00 --dangerously-skip-permissions "Write tests for src/new.ts"
 
 # Documentation
 claude -p --append-system-prompt "Output Markdown only" "Document src/api/"
@@ -591,10 +591,10 @@ claude -p --model claude-haiku-4-5 "Summarize this error log"
 
 FLAG INTERACTIONS
 ━━━━━━━━━━━━━━━━
---system-prompt:          ONLY works with -p (print mode)
---append-system-prompt:   ONLY works with -p (print mode)
+--system-prompt:          Commonly used with -p but available in all modes
+--append-system-prompt:   Commonly used with -p but available in all modes
 --output-format:          ONLY works with -p (print mode)
---max-turns:              ONLY works with -p (print mode)
+--max-budget-usd:         ONLY works with -p (print mode)
 --continue + --resume:    Cannot combine (mutually exclusive)
 --allowedTools:           Works in all modes
 --dangerously-skip-permissions: Intended for -p in CI only
