@@ -207,12 +207,12 @@ D) These annotations contradict each other and the client should reject the tool
 ---
 
 ### Q21 [D3]
-Your monorepo has a root `CLAUDE.md` and a subdirectory `packages/api/CLAUDE.md`. The subdirectory file contains `#import ../../shared/conventions.md`. A developer asks what happens when Claude Code is invoked from within `packages/api/`. What is correct?
+Your monorepo has a root `CLAUDE.md` and a subdirectory `packages/api/CLAUDE.md`. The subdirectory file contains `@../../shared/conventions.md`. A developer asks what happens when Claude Code is invoked from within `packages/api/`. What is correct?
 
 A) Only `packages/api/CLAUDE.md` is loaded — subdirectory files override root files completely  
-B) Both files are loaded (root provides base context, subdirectory adds specifics), and the `#import` directive pulls in the contents of `shared/conventions.md` as if it were inlined at that point  
-C) The `#import` directive is not a real feature — Claude Code only reads literal CLAUDE.md file content  
-D) The `#import` directive triggers a git submodule fetch of the referenced file  
+B) Both files are loaded (root provides base context, subdirectory adds specifics), and the `@path` import pulls in the contents of `shared/conventions.md` as if it were inlined at that point  
+C) The `@path` import syntax is not a real feature — Claude Code only reads literal CLAUDE.md file content  
+D) The `@path` import syntax triggers a git submodule fetch of the referenced file  
 
 ---
 
@@ -239,7 +239,7 @@ D) `--output-format text` — pipe the plain text output through a custom regex 
 ### Q24 [D3]
 You are configuring Claude Code for a long-running refactoring task that should stop after processing 20 files (one file per tool call). Which mechanism correctly limits the agent's execution?
 
-A) `--max-turns 20` — this limits the number of conversational turns (each turn being one assistant response/tool-use cycle), preventing unbounded execution  
+A) `--max-budget-usd 10.00` — this caps the dollar spend for the invocation, preventing unbounded execution  
 B) `--max-tokens 20` — this limits output to 20 tokens, forcing the agent to stop  
 C) Set `max_iterations: 20` in CLAUDE.md — the agent reads this as a runtime constraint  
 D) `--timeout 20` — this stops execution after 20 seconds  
@@ -290,19 +290,19 @@ D) It disables rate limiting, potentially causing excessive API charges
 You are debugging why Claude Code ignores instructions in your CLAUDE.md file. The file is located at `./CLAUDE.md` in the project root and contains build instructions. What is the most likely issue?
 
 A) CLAUDE.md must be named in all-caps with a `.txt` extension  
-B) The file exceeds the maximum allowed size and is silently truncated — check if the file has grown too large, or if it uses `#import` directives that pull in excessive content  
+B) The file exceeds the maximum allowed size and is silently truncated — check if the file has grown too large, or if it uses `@path` imports that pull in excessive content  
 C) CLAUDE.md is only read in interactive mode — your headless invocation skips it  
 D) The file must be listed in `.claude/settings.json` to be activated  
 
 ---
 
 ### Q30 [D3]
-You configure `--max-turns 5` for a Claude Code session. The agent uses 3 turns for tool calls and produces a final response on turn 4. What happens if the task is not yet complete by the agent's own assessment?
+You configure `--max-budget-usd 2.00` for a Claude Code session. The agent uses $1.50 on tool calls and produces a partial response. What happens if the task is not yet complete by the agent's own assessment?
 
 A) The agent ignores the limit and continues until the task is done  
-B) The agent stops at or before the max-turns limit — if it reaches 5 turns, execution halts regardless of task completion, and the user receives whatever output has been produced  
+B) The agent stops at or before the budget limit — if it reaches $2.00 in spend, execution halts regardless of task completion, and the user receives whatever output has been produced  
 C) The agent enters a "summary mode" and produces a compressed final answer  
-D) The system automatically doubles the turn limit when it detects incomplete work  
+D) The system automatically doubles the budget limit when it detects incomplete work  
 
 ---
 
@@ -569,7 +569,7 @@ MCP does not maintain session state across disconnections. When a server crashes
 `idempotentHint: true` with `readOnlyHint: false` means the tool performs writes but is safe to call multiple times with the same input (same effect as calling once). This is the classic definition of idempotency. Clients can safely implement retry logic for transient failures without risking duplicate side effects, similar to HTTP PUT semantics.
 
 **Q21: B** [D3]
-Claude Code loads CLAUDE.md files hierarchically — the root file provides base context, and subdirectory files add specifics when working in that directory. The `#import` directive is real syntax that inlines the referenced file's contents at that point in the CLAUDE.md, allowing shared conventions to be maintained in one place and imported where needed.
+Claude Code loads CLAUDE.md files hierarchically — the root file provides base context, and subdirectory files add specifics when working in that directory. The `@path` import syntax (e.g., `@../../shared/conventions.md`) is real syntax that inlines the referenced file's contents at that point in the CLAUDE.md, allowing shared conventions to be maintained in one place and imported where needed.
 
 **Q22: A** [D3]
 `--dangerously-skip-permissions` is the flag designed for CI/headless environments where no human is available to approve permission prompts. It bypasses all confirmation dialogs, making Claude Code fully non-interactive. The flag name intentionally signals the security tradeoff. Combined with `-p` for print mode, it enables fully automated pipeline integration.
@@ -578,7 +578,7 @@ Claude Code loads CLAUDE.md files hierarchically — the root file provides base
 `--output-format stream-json` emits newline-delimited JSON objects in real-time as Claude Code processes. Each object represents an event (assistant text, tool call, tool result, etc.), enabling programmatic real-time parsing in CI pipelines. This is distinct from `--output-format json` which returns a single complete JSON object only after the entire operation finishes.
 
 **Q24: A** [D3]
-`--max-turns` limits the number of agentic loop iterations (each turn = one assistant response cycle, which may include tool use). Setting it to 20 caps execution at 20 turns. This is the correct mechanism for bounding agent execution by number of actions rather than by time or tokens.
+`--max-budget-usd` limits the dollar spend for the invocation. Setting it to 10.00 caps execution at $10 of API spend. This is the correct mechanism for bounding agent execution by cost rather than by time or tokens.
 
 **Q25: B** [D3]
 Enterprise policy overrides take precedence over all other configuration levels. If enterprise policy denies a permission, neither project-level `.claude/settings.json` nor user-level settings can override that denial. This ensures organizational security policies are enforced consistently regardless of individual developer configurations.
@@ -593,10 +593,10 @@ Stop hooks are configured in the hooks system within `.claude/settings.json` (or
 `--dangerously-skip-permissions` removes the human-in-the-loop safety mechanism. If malicious content in the codebase (e.g., a crafted comment) tricks the model via prompt injection, there is no confirmation step before file writes or shell command execution. This is why the flag is named "dangerously" — it trades safety for automation.
 
 **Q29: B** [D3]
-The most common cause of ignored CLAUDE.md instructions is excessive file size. If the file (including `#import` expansions) grows too large, it may be truncated or partially processed. Other issues could include syntax errors in `#import` paths. CLAUDE.md is read in all modes (interactive and headless) and does not require explicit activation.
+The most common cause of ignored CLAUDE.md instructions is excessive file size. If the file (including `@path` import expansions) grows too large, it may be truncated or partially processed. Other issues could include syntax errors in `@path` import paths. CLAUDE.md is read in all modes (interactive and headless) and does not require explicit activation.
 
 **Q30: B** [D3]
-`--max-turns` is a hard limit. When the agent reaches the specified number of turns, execution stops regardless of whether the agent considers the task complete. The user receives all output produced up to that point. The agent does not get special behavior at the limit — it simply does not get another turn.
+`--max-budget-usd` is a hard spending cap. When the agent reaches the specified dollar amount, execution stops regardless of whether the agent considers the task complete. The user receives all output produced up to that point. The agent does not get special behavior at the limit — it simply cannot spend more.
 
 **Q31: B** [D4]
 Prompt caching requires minimum token thresholds in the cached prefix. The minimum varies by model: Sonnet 4.5/4.1/4/3.7 require 1024 tokens; Fable 5, Sonnet 4.6, Haiku 3.5/3 require 2048 tokens; Opus 4.8/4.7/4.6/4.5 and Haiku 4.5 require 4096 tokens. An 800-token system prompt falls below all thresholds, so the cache is never created. You need to increase the cached content to meet the minimum for your model.

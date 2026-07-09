@@ -11,7 +11,7 @@
 ## Questions
 
 ### Q1
-A project has CLAUDE.md files at: `~/.claude/CLAUDE.md`, `./CLAUDE.md`, `./src/CLAUDE.md`, and `./.claude/CLAUDE.md`. When Claude edits a file in `/src/`, which CLAUDE.md files are loaded?
+A project has CLAUDE.md files at: `~/.claude/CLAUDE.md`, `./CLAUDE.md`, `./src/CLAUDE.md`, and `./CLAUDE.local.md`. When Claude edits a file in `/src/`, which CLAUDE.md files are loaded?
 
 A) Only `./src/CLAUDE.md`  
 B) All four files (they are additive)  
@@ -61,7 +61,7 @@ D) User is prompted each time due to conflicting rules
 ---
 
 ### Q6
-A slash command file `.claude/commands/deploy.md` contains: `"Run the deployment pipeline for $ARGUMENTS environment"`. A user types `/project:deploy staging`. What prompt does Claude receive?
+A slash command file `.claude/commands/deploy.md` contains: `"Run the deployment pipeline for $ARGUMENTS environment"`. A user types `/deploy staging`. What prompt does Claude receive?
 
 A) "Run the deployment pipeline for staging environment"  
 B) "deploy staging"  
@@ -171,10 +171,10 @@ D) The Write tool doesn't accept relative paths
 ---
 
 ### Q17
-A custom slash command `/project:review` includes detailed review criteria. How is this different from putting the same criteria in CLAUDE.md?
+A custom slash command `/review` includes detailed review criteria. How is this different from putting the same criteria in CLAUDE.md?
 
 A) No difference — both are always active  
-B) Slash command: applied ON DEMAND when user types `/project:review`; CLAUDE.md: ALWAYS active in every interaction  
+B) Slash command: applied ON DEMAND when user types `/review`; CLAUDE.md: ALWAYS active in every interaction  
 C) Slash commands override CLAUDE.md rules  
 D) CLAUDE.md criteria only apply during reviews  
 
@@ -280,7 +280,7 @@ PreToolUse hooks with non-zero exit BLOCK tool execution. The hook's stdout ("Bl
 Deny rules are CUMULATIVE across all levels — a deny at ANY level (global, project, or local) blocks the action regardless of allow rules elsewhere. The project deny on `Bash(git push *)` cannot be overridden by a local allow. Priority (local > project > global) applies to ALLOW rules merging, but deny is always absolute. For additional safety beyond deny, use PreToolUse hooks.
 
 ### A6: **A**
-`$ARGUMENTS` is replaced with whatever the user types after the command name. `/project:deploy staging` → "Run the deployment pipeline for staging environment." The substitution is direct and literal.
+`$ARGUMENTS` is replaced with whatever the user types after the command name. `/deploy staging` → "Run the deployment pipeline for staging environment." The substitution is direct and literal.
 
 ### A7: **B**
 Subdirectory CLAUDE.md files are the correct approach: each directory gets rules relevant to its language/framework. They only load when Claude works in that directory (token-efficient), and each module's rules are co-located with its code (maintainable).
@@ -289,7 +289,7 @@ Subdirectory CLAUDE.md files are the correct approach: each directory gets rules
 Plan mode is essential here: 12 files = high complexity, payment processing = high risk (bugs = money), and there are multiple valid refactoring approaches. Plan mode lets the human review the scope, approach, and risks before any changes happen.
 
 ### A9: **C**
-The hook should check the file extension before running language-specific formatters. While Prettier will attempt to format the Python file (potentially producing invalid Python), the correct answer focuses on the proper solution: the hook must be written to only run on applicable file types. Correct hook: `if [[ "$FILE_PATH" == *.ts || "$FILE_PATH" == *.js ]]; then npx prettier --write "$FILE_PATH"; fi`
+The hook should check the file extension before running language-specific formatters. While Prettier will attempt to format the Python file (potentially producing invalid Python), the correct answer focuses on the proper solution: the hook must be written to only run on applicable file types. Correct hook: `INPUT=$(cat); FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty'); if [[ "$FILE_PATH" == *.ts || "$FILE_PATH" == *.js ]]; then npx prettier --write "$FILE_PATH"; fi`
 
 ### A10: **A**
 CLAUDE.md: project conventions, tech stack, coding rules (needed every session, loaded automatically). Memory: user preferences, role, working style (personal, carried across projects). They serve different purposes — CLAUDE.md is project knowledge, memory is user knowledge.
@@ -304,7 +304,7 @@ Context compaction may summarize or drop messages from 50 turns ago. Critical ru
 PreToolUse hooks are the strongest: they execute external code (not Claude's interpretation), and a non-zero exit physically blocks the tool from executing. Settings deny (D) is strong and cumulative (cannot be overridden), but hooks provide programmatic logic, dynamic conditions, and external validation that static deny rules cannot. CLAUDE.md/system prompt (A/B) are instructions Claude interprets (soft).
 
 ### A14: **B**
-CLAUDE.md is an instruction that Claude generally follows, but it's not a hard guarantee. For critical infrastructure protection, use a PreToolUse hook that checks `$FILE_PATH` and blocks writes to `/infrastructure/production/**`. Hooks are code-enforced; CLAUDE.md is Claude-interpreted.
+CLAUDE.md is an instruction that Claude generally follows, but it's not a hard guarantee. For critical infrastructure protection, use a PreToolUse hook that parses the file path from STDIN JSON (`tool_input.file_path`) and blocks writes to `/infrastructure/production/**`. Hooks are code-enforced; CLAUDE.md is Claude-interpreted.
 
 ### A15: **B**
 In plan mode, the user's feedback refines the plan before execution begins. Claude should present an updated plan with an alternative approach for step 4, await approval, then execute the revised plan. This is the core value of plan mode — alignment before action.
@@ -313,7 +313,7 @@ In plan mode, the user's feedback refines the plan before execution begins. Clau
 Path traversal (`src/../secrets/`) escapes the intended directory scope. Paths must be normalized (resolve `..`) before matching against allow patterns. Without normalization, permission patterns are bypassable. This is a security vulnerability.
 
 ### A17: **B**
-Key distinction: CLAUDE.md criteria are ALWAYS active (every message, every action). Slash commands are ON-DEMAND — only triggered when the user explicitly types `/project:review`. Use CLAUDE.md for rules that should always apply; commands for workflows triggered explicitly.
+Key distinction: CLAUDE.md criteria are ALWAYS active (every message, every action). Slash commands are ON-DEMAND — only triggered when the user explicitly types `/review`. Use CLAUDE.md for rules that should always apply; commands for workflows triggered explicitly.
 
 ### A18: **A**
 Hooks run synchronously — Claude waits for completion. A 45-second hook makes Claude appear frozen for 45 seconds on every tool call. Fix: set a timeout (e.g., 10s), and move heavy validation to Stop hooks (run after Claude finishes) or make the hook more targeted.

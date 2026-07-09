@@ -86,7 +86,7 @@ D) MCP servers shouldn't have passwords
 ---
 
 ### Q8 [D3]
-A user types `/project:review`. The file `.claude/commands/review.md` contains review criteria. What role does this play compared to CLAUDE.md?
+A user types `/review`. The file `.claude/commands/review.md` contains review criteria. What role does this play compared to CLAUDE.md?
 
 A) Same role — both are always active  
 B) The slash command is ON-DEMAND (only when invoked); CLAUDE.md is ALWAYS ACTIVE  
@@ -291,7 +291,7 @@ D) Ask Claude to provide limit
 A team wants Claude to auto-format all written files. What is the correct hook configuration?
 
 A) PreToolUse hook on Write that formats first  
-B) PostToolUse hook on Write and Edit that runs the formatter on `$FILE_PATH`  
+B) PostToolUse hook on Write and Edit that parses the file path from STDIN JSON (`tool_input.file_path`) and runs the formatter on it  
 C) Stop hook that formats all changed files  
 D) Add "always format code" to CLAUDE.md  
 
@@ -498,11 +498,11 @@ D) It depends on the exit code
 ---
 
 ### Q49 [D4]
-Batch processing: 50,000 items classified using Haiku via Batches API (50% discount). Approximate cost at $0.80/M input, $4/M output, 200 input + 50 output tokens per item?
+Batch processing: 50,000 items classified using Haiku via Batches API (50% discount). Approximate cost at $1/M input, $5/M output, 200 input + 50 output tokens per item?
 
 A) ~$40  
-B) ~$9  
-C) ~$4.50 (batch discount applied to both input and output)  
+B) ~$11 (batch discount applied to both input and output)  
+C) ~$4.50  
 D) ~$1  
 
 ---
@@ -667,8 +667,8 @@ PostToolUse runs AFTER the tool has already executed — it cannot block or reve
 
 ### A49: **B** [D4]
 50,000 items × 200 input tokens = 10M input tokens. 50,000 items × 50 output tokens = 2.5M output tokens.
-Haiku rates with 50% batch discount: input = $0.80/M × 0.5 = $0.40/M; output = $4/M × 0.5 = $2/M.
-Input cost: 10M × $0.40/M = $4. Output cost: 2.5M × $2/M = $5. Total: $4 + $5 = $9.
+Haiku rates with 50% batch discount: input = $1/M × 0.5 = $0.50/M; output = $5/M × 0.5 = $2.50/M.
+Input cost: 10M × $0.50/M = $5. Output cost: 2.5M × $2.50/M = $6.25. Total: $5 + $6.25 ≈ $11.
 
 ### A50: **B** [D5]
 Error budget exhaustion = hard stop. The agent has demonstrated it cannot resolve the issue. Escalate to human with: full error chain (what was tried, what failed each time), current state, and what's needed to resolve. Never exceed the budget.

@@ -307,7 +307,7 @@ D) `claude --reconnect` which finds and attaches to the previous session
 ### Q28. 
 You are building an automated code review bot that uses Claude Code in a Docker container. The bot must run completely unattended, but you need to prevent infinite loops where Claude keeps trying to fix failing tests. Which flags should you combine?
 
-A) `--dangerously-skip-permissions --max-turns 10 --print`  
+A) `--dangerously-skip-permissions --max-budget-usd 5.00 --print`  
 B) `--no-permissions --timeout 300 --non-interactive`  
 C) `--auto-approve --loop-limit 10 --headless`  
 D) `--skip-auth --max-iterations 10 --batch`  
@@ -328,7 +328,7 @@ D) Press Ctrl+P to enter planning mode in the current session
 Your team wants to generate an implementation plan using Claude Code in a CI environment and save it for architect review before any code is written. Which approach correctly uses plan mode in headless operation?
 
 A) `claude --print --plan "Design the authentication module" > plan.md`  
-B) `claude --plan --output-format text -p "Design the authentication module" > plan.md`  
+B) `claude --permission-mode plan --output-format text -p "Design the authentication module" > plan.md`  
 C) `claude --print --mode=plan "Design the authentication module" > plan.md`  
 D) `claude --headless --planning-only "Design the authentication module" > plan.md`  
 
@@ -383,7 +383,7 @@ D) Personal context (e.g., "I'm working on the payments team")
 A platform team maintains a shared set of coding standards and API guidelines that multiple project teams should follow. They want to distribute these instructions without requiring each team to copy-paste large blocks of text into their own `CLAUDE.md`. What feature supports this?
 
 A) Use `#include ../shared/standards.md` in each project's CLAUDE.md  
-B) Use `#import ../shared/standards.md` in each project's CLAUDE.md  
+B) Use `@../shared/standards.md` in each project's CLAUDE.md  
 C) Use `@reference ../shared/standards.md` in each project's CLAUDE.md  
 D) Use `$source ../shared/standards.md` in each project's CLAUDE.md  
 
@@ -562,13 +562,13 @@ D) Automatically call the new tool once to verify it works before adding it to t
 `--continue` automatically resumes the most recent conversation without needing a session ID. `--resume` requires a specific session ID and is used when you want to return to a particular past session that may not be the most recent one.
 
 **Q28. A**  
-`--dangerously-skip-permissions` bypasses all permission prompts (required for unattended CI), `--max-turns` limits how many agentic loop iterations Claude can take (preventing infinite fix cycles), and `--print` ensures non-interactive execution. This is the correct combination for controlled autonomous operation.
+`--dangerously-skip-permissions` bypasses all permission prompts (required for unattended CI), `--max-budget-usd` limits the dollar spend for the invocation (preventing runaway costs from infinite fix cycles), and `--print` ensures non-interactive execution. This is the correct combination for controlled autonomous operation.
 
 **Q29. B**  
 Plan mode is toggled with Shift+Tab during an interactive session. There is no `/plan` slash command. Plan mode instructs Claude to reason about and outline an approach without making any file modifications.
 
 **Q30. B**  
-The `--plan` flag enables plan mode in headless/non-interactive operation. Combined with `--output-format text` and `-p` (for providing the prompt inline), this produces a planning-only output suitable for architect review. The output can be redirected to a file.
+`--permission-mode plan` enables plan mode in headless/non-interactive operation. Combined with `--output-format text` and `-p` (for providing the prompt inline), this produces a planning-only output suitable for architect review. The output can be redirected to a file.
 
 **Q31. B**  
 Deny rules in Claude Code's permission system are cumulative and absolute. A deny at any level (enterprise, user, or project) blocks the action regardless of allow rules at other levels. This is a security-first design ensuring that higher-authority restrictions cannot be circumvented.
@@ -583,13 +583,13 @@ Code patterns and style guidelines belong in `CLAUDE.md` at the project level be
 Complete architecture documentation and module dependency graphs should NOT be stored in memory. Memory is designed for brief personal preferences and context, not large technical documentation. Architecture decisions belong in CLAUDE.md or project documentation where they can be version-controlled and shared with the team.
 
 **Q35. B**  
-The `#import` directive in CLAUDE.md allows importing instructions from other files, enabling modular instruction sets. This lets platform teams maintain a single source of truth for shared standards that multiple projects can reference without duplication.
+The `@path` import syntax in CLAUDE.md allows including instructions from other files, enabling modular instruction sets. You simply write `@../shared/standards.md` on its own line — no keyword, just `@` followed by the path. This lets platform teams maintain a single source of truth for shared standards that multiple projects can reference without duplication.
 
 **Q36. C**  
 Subdirectory CLAUDE.md files activate when Claude operates on files within that subtree. Since the target file is under `/repo/services/auth/`, both the root CLAUDE.md and the auth-specific CLAUDE.md are active. The payments CLAUDE.md is not activated because the operation does not involve files in that subtree.
 
-**Q37. B**  
-Custom commands in the `.claude/commands/` directory use colon-separated naming with a `project:` prefix. Subdirectory nesting maps to colon separators, so `.claude/commands/db/migrate.md` becomes `/project:db:migrate`.
+**Q37. A**  
+Subdirectory nesting maps to colon separators, so `.claude/commands/db/migrate.md` becomes `/db:migrate`.
 
 **Q38. B**  
 `/code-review` is the built-in skill that reviews the current working diff for correctness bugs and simplification opportunities. `/review` is for GitHub PRs (remote), `/verify` runs the app to observe behavior, and `/simplify` focuses only on reuse/efficiency without bug detection.
