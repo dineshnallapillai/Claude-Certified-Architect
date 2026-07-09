@@ -121,6 +121,120 @@ LOADING ORDER (all are loaded, not overriding):
 - Skip integration tests that require Redis (I don't run it locally)
 ```
 
+### Pattern 5: Modular CLAUDE.md with @import
+
+Large CLAUDE.md files become unwieldy. The **@import** directive allows splitting into focused files:
+
+```markdown
+# ./CLAUDE.md (Project Root)
+
+# Project: E-Commerce API
+
+@import .claude/rules/tech-stack.md
+@import .claude/rules/conventions.md
+@import .claude/rules/testing.md
+@import .claude/rules/git-workflow.md
+
+## Additional Context
+- First-time setup: see onboarding guide
+- Common tasks: see /docs/howtos/
+```
+
+**@import files to create:**
+
+```markdown
+# ./.claude/rules/tech-stack.md
+## Tech Stack
+- TypeScript, Node.js 20, Express
+- PostgreSQL 15 with Prisma ORM
+- Jest for testing, ESLint + Prettier
+```
+
+```markdown
+# ./.claude/rules/conventions.md
+## Code Conventions
+- Use functional approach, avoid classes
+- All API responses: { data, error, meta }
+- Database queries through service layer only
+```
+
+```markdown
+# ./.claude/rules/testing.md
+## Testing Standards
+- Unit tests: `src/**/*.test.ts`
+- Integration tests: `tests/integration/`
+- Mock external services, never hit real APIs
+```
+
+#### @import Syntax Rules
+
+| Element | Syntax | Example |
+|---------|--------|---------|
+| **Relative path** | `@import path/to/file.md` | `@import .claude/rules/testing.md` |
+| **Absolute path** | Not supported; always relative to importing file | Use relative paths only |
+| **Directory imports** | Not supported; must name specific files | Don't: `@import .claude/rules/` |
+| **Recursive imports** | NOT allowed (A imports B, B cannot import A) | Creates circular dependency error |
+| **Comments** | `# Comment here` before/after @import | Lines before @import are ignored |
+
+#### @import Resolution
+
+When Claude Code loads `./CLAUDE.md`:
+1. Reads the file
+2. Finds `@import .claude/rules/testing.md`
+3. Loads `./.claude/rules/testing.md` relative to current file location
+4. Inserts content inline where @import was
+5. Continues processing remaining lines
+
+Result: All imported files are merged into one logical CLAUDE.md content.
+
+#### @import Use Cases
+
+**Use case 1: By area (recommended)**
+```
+./CLAUDE.md
+├── @import .claude/rules/api-conventions.md      (API module rules)
+├── @import .claude/rules/database-conventions.md (DB module rules)
+└── @import .claude/rules/frontend-rules.md       (Frontend module rules)
+```
+
+**Use case 2: By type**
+```
+./CLAUDE.md
+├── @import .claude/standards/coding.md       (All coding standards)
+├── @import .claude/standards/testing.md      (All testing standards)
+├── @import .claude/standards/deployment.md   (All deploy standards)
+└── @import .claude/standards/git.md          (All git standards)
+```
+
+**Use case 3: Selective import per subdirectory**
+```
+# ./src/api/CLAUDE.md
+@import ../../.claude/rules/api-conventions.md
+@import ../../.claude/standards/testing.md
+
+## API-Specific Rules
+- Rate limiting: 100 req/min
+```
+
+```
+# ./src/database/CLAUDE.md
+@import ../../.claude/rules/database-conventions.md
+@import ../../.claude/standards/testing.md
+
+## Database-Specific Rules
+- Migrations always include rollback
+```
+
+#### When NOT to Use @import
+
+❌ **Don't use @import for:**
+- Machine-specific config (use .claude/CLAUDE.md local instead)
+- Personal preferences (use ~/.claude/CLAUDE.md)
+- Secrets or credentials (never commit to git)
+- Large binary or non-text files
+
+**Reason:** @import is for shared, version-controlled, text-based standards.
+
 ---
 
 ## 3. Implementation Details
@@ -151,38 +265,6 @@ LOADING ORDER (all are loaded, not overriding):
 | 500-2000 tokens | Acceptable, good detail level |
 | 2000-5000 tokens | Getting large, every call costs more |
 | 5000+ tokens | Consider splitting into subdirectory files |
-
-### The `#import` Directive
-
-CLAUDE.md files support an `#import` directive that allows including other markdown files. This enables modular management of large instruction sets:
-
-```markdown
-# CLAUDE.md (project root)
-
-## Core Project Info
-- TypeScript + Node.js 20
-
-#import ./rules/security.md
-#import ./rules/testing.md
-#import ./rules/api-conventions.md
-```
-
-**Key points about `#import`:**
-- Path is relative to the file containing the directive
-- Imported files are inlined at the point of the `#import` statement
-- Useful for splitting large instruction sets into focused files
-- Keeps the main CLAUDE.md concise while referencing detailed rules
-- Imported files can themselves contain `#import` directives (nested imports)
-
-**Example directory structure:**
-```
-project/
-├── CLAUDE.md                    ← Main file with #import directives
-└── rules/
-    ├── security.md              ← Security rules
-    ├── testing.md               ← Testing conventions
-    └── api-conventions.md       ← API design rules
-```
 
 ### File Discovery Rules
 
