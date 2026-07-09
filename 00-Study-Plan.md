@@ -24,6 +24,7 @@
 | 1.4 | Tool Design Principles & MCP Integration | ⬜ |
 | 1.5 | Agent Delegation & Task Decomposition | ⬜ |
 | 1.6 | Error Handling in Agentic Systems | ⬜ |
+| 1.7 | API Fundamentals, Streaming & Model Selection | ⬜ |
 
 ### Domain 2: Tool Design & Integration
 | # | Topic | Status |
@@ -44,6 +45,7 @@
 | 3.4 | Plan Mode vs Direct Execution | ⬜ |
 | 3.5 | Permissions & Settings Configuration | ⬜ |
 | 3.6 | Hooks & Automation | ⬜ |
+| 3.7 | CLI Flags & Headless Mode | ⬜ |
 
 ### Domain 4: Prompt Engineering & Validation
 | # | Topic | Status |
@@ -80,28 +82,12 @@
 
 ---
 
-## Progress Tracker & Updates
+## Progress Tracker
 
-**Update Log (July 9, 2026):**
-- ✅ D1-03: Added comprehensive Subagent Invocation section (Task tool, allowedTools, fork_session)
-- ✅ D1-03: Added --resume CLI flag documentation with session resumption patterns
-- ✅ D1-03: Added fork_session exploration pattern (divergent approaches)
-- ✅ D1-03: Added Pattern 5 for coordinator-subagent orchestration
-- ✅ D3-05: Added CLI Flags section (-p, --output-format json, --json-schema)
-- ✅ D3-05: CI/CD integration examples with structured output
-- ✅ D4-06: **COMPLETELY REWRITTEN** from "System Prompts" to "Multi-Instance & Multi-Pass Review"
-- ✅ D4-06: Added independent instance architecture, multi-pass patterns, consensus review
-- ✅ D4-06: Added cost-coverage tradeoff analysis and false positive management
-
-**Current Status:**
-- **Total Topics:** 30
-- **Comprehensively Covered:** 28/30 (93% alignment with exam guide)
-- **Remaining Minor Gaps:** 2 topics with thin coverage (see below)
-- **Critical Gaps Resolved:** 0 (all addressed)
-
-**Minor Gaps Remaining (Optional Enhancement):**
-- D1-04: Handoff protocols could be expanded (currently in D1-03, could be dedicated section)
-- D3-01: @import syntax documentation could be more detailed (basic coverage exists)
+- **Total Topics:** 32
+- **Completed:** 0/32
+- **Current Domain:** —
+- **Next Topic:** 1.1 Agentic Loops & Core API Functionality
 
 ---
 
@@ -109,14 +95,31 @@
 
 ```
 claude-architect-cert/
-├── 00-Study-Plan.md          (this file)
+├── 00-Study-Plan.md              (this file)
+├── D0-Critical-Exam-Traps.md    ← HIGH-PRIORITY review before exam
+├── Exam-Day-Cheat-Sheet.md       (last-minute facts reference)
 ├── D1-01-Agentic-Loops.md
 ├── D1-02-Multi-Agent-Orchestration.md
 ├── D1-03-Hooks-Workflows-Sessions.md
-├── ...
-├── D5-06-Caching-Token-Optimization.md
+├── D1-04-Tool-Design-MCP-Integration.md
+├── D1-05-Agent-Delegation-Task-Decomposition.md
+├── D1-06-Error-Handling-Agentic-Systems.md
+├── D1-07-API-Fundamentals-Streaming-Models.md
+├── D2-01 through D2-06 (Tool Design & Integration)
+├── D3-01 through D3-07 (Claude Code Configuration)
+├── D4-01 through D4-06 (Prompt Engineering)
+├── D5-01 through D5-06 (Context Management)
 └── Practice-Questions/
-    ├── Domain-1-Questions.md
-    ├── Domain-2-Questions.md
-    └── ...
+    ├── Domain-1-Agentic-Architecture.md  (25 questions)
+    ├── Domain-2-Tool-Design.md           (25 questions)
+    ├── Domain-3-Claude-Code-Config.md    (25 questions)
+    ├── Domain-4-Prompt-Engineering.md    (25 questions)
+    ├── Domain-5-Context-Management.md    (25 questions)
+    ├── Full-Mock-Exam-1.md               (50 questions)
+    ├── Full-Mock-Exam-2.md               (50 questions)
+    └── Full-Mock-Exam-3.md               (50 questions) ← NEW
 ```
+
+## Total Practice Questions: 275
+- Domain quizzes: 125 (25 × 5 domains)
+- Full mock exams: 150 (50 × 3 exams)

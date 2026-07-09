@@ -185,6 +185,7 @@ claude -p \
 | `--resume <id>` | | Resume specific session | Interactive/Print |
 | `--model <id>` | | Override model selection | All |
 | `--output-format <fmt>` | | Control output format (text/json/stream-json) | Print only |
+| `--json-schema <path>` | | Validate output against JSON schema | Print only |
 | `--max-turns <n>` | | Limit agentic loop iterations | Print |
 | `--system-prompt <text>` | | Override system prompt entirely | Print only |
 | `--append-system-prompt <text>` | | Append text to system prompt | Print only |
@@ -235,6 +236,90 @@ Newline-delimited JSON events emitted in real-time:
 {"type":"content_block_stop","index":0}
 {"type":"message_stop"}
 ```
+
+### JSON Schema Validation with `--json-schema`
+
+The `--json-schema` flag validates Claude's output against a provided JSON schema, ensuring structured output compliance in automated workflows.
+
+**Purpose:**
+- Validate structured output in CI/CD pipelines
+- Enforce schema compliance without relying on tool_use
+- Parse and route Claude's response programmatically
+- Reject malformed output and retry automatically
+
+**Usage Pattern:**
+
+```bash
+# Define schema file
+cat > review_schema.json <<'EOF'
+{
+  "type": "object",
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {"type": "string"},
+          "line": {"type": "integer"},
+          "severity": {"type": "string", "enum": ["high", "medium", "low"]},
+          "message": {"type": "string"}
+        },
+        "required": ["file", "line", "severity", "message"]
+      }
+    }
+  },
+  "required": ["findings"]
+}
+EOF
+
+# Run with schema validation
+claude -p \
+  --output-format json \
+  --json-schema review_schema.json \
+  "Review this code for bugs. Output JSON with array of findings: {findings: [{file, line, severity, message}, ...]}"
+```
+
+**Output Format:**
+When `--json-schema` is used, Claude's output must be valid JSON matching the schema:
+```json
+{
+  "type": "result",
+  "subtype": "success",
+  "cost_usd": 0.005,
+  "result": {
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"findings\": [{\"file\": \"src/auth.ts\", \"line\": 42, \"severity\": \"high\", \"message\": \"SQL injection vulnerability\"}]}"
+      }
+    ]
+  }
+}
+```
+
+**Error Handling:**
+If Claude's output doesn't match the schema:
+- Exit code = 1 (error)
+- Error message includes validation error details
+- Can be used with `--max-turns` to trigger automatic retry
+
+```bash
+# Retry up to 5 times if schema validation fails
+claude -p \
+  --output-format json \
+  --json-schema findings.json \
+  --max-turns 5 \
+  "Output JSON findings matching this schema: ..."
+```
+
+**Best Practices:**
+- Keep schemas simple (deep nesting reduces accuracy)
+- Use `enum` for fixed categories
+- Make fields optional (`"required": []`) if not always present
+- Include description in prompt showing schema expectations
+- Test schema with manual prompts before CI integration
 
 ### Exit Codes
 
