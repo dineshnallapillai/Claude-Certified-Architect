@@ -244,11 +244,8 @@ Effective (merged):
   allow: ["Read", "Glob", "Bash(npm test *)", "Write(src/**)"]
   deny: ["Bash(rm *)"]
   
-Rule: Deny rules are CUMULATIVE — a deny at ANY level blocks the action
-      regardless of allow rules at other levels. Local allow CANNOT
-      override project deny. This is by security design.
-      
-      For hard enforcement beyond allow/deny lists, use hooks (PreToolUse).
+Rule: If same pattern appears in both allow and deny at different levels,
+      higher-priority file (local > project > global) wins.
 ```
 
 ---
@@ -326,7 +323,7 @@ Layer 5: OS-level permissions (filesystem/network)
 }
 ```
 
-Project-level because it's a team-wide policy. Committed so all members get it. Deny rules are cumulative across all levels, so even if a user adds a matching pattern to their local allow, the project deny still blocks the action.
+Project-level because it's a team-wide policy. Committed so all members get it. Deny list ensures even if a user adds it to their local allow, the project deny takes precedence.
 
 ### Scenario 2
 **Q:** A developer finds that Claude asks permission for every `git diff` and `git log` command. How do they reduce permission prompts without compromising security?
@@ -351,9 +348,9 @@ These are all read-only operations with no security risk. Local settings because
 ### Scenario 3
 **Q:** Settings conflict: project settings deny `"Bash(rm *)"` but a developer's local settings allow `"Bash(rm temp/*)"`. Which wins?
 
-**A:** **The deny rule wins** — deny rules are enforced cumulatively across all levels. A deny at ANY level (project, user global, or local) blocks the action regardless of allow rules at other levels. The local allow for `Bash(rm temp/*)` will NOT override the project deny for `Bash(rm *)`. This is by security design: deny rules are absolute guards.
+**A:** **Local settings have higher priority**, so `Bash(rm temp/*)` would be allowed. However, this is a security concern — the project-wide deny was intentionally protective.
 
-For truly hard enforcement with programmatic logic (e.g., allowing specific rm patterns while blocking others), use PreToolUse hooks. Hooks provide the strongest enforcement because they execute external code that cannot be overridden by any settings file.
+Best practice: Project should use hooks (PreToolUse) for hard enforcement of safety-critical rules, since settings can be overridden locally. Settings deny is a guard, not a guarantee.
 
 ---
 
@@ -366,7 +363,143 @@ For truly hard enforcement with programmatic logic (e.g., allowing specific rm p
 | Secrets in settings files | Credentials exposed | Use env vars or vault |
 | Over-restrictive shared settings | Team frustrated, overrides locally | Balance safety and productivity |
 | No project settings at all | Each person configures independently | Establish team baseline |
-| Relying only on settings for security | Deny rules block but hooks provide programmable logic | Use hooks for complex enforcement beyond pattern matching |
+| Relying only on settings for security | Local override bypasses project deny | Use hooks for hard enforcement |
+
+---
+
+## 7. Claude Code CLI Flags for Automation
+
+When running Claude Code in CI/CD pipelines or automated contexts, specific flags enable non-interactive operation and structured output.
+
+### Essential CLI Flags
+
+#### -p / --print (Non-Interactive Mode)
+
+```bash
+# Interactive (default)
+claude "Review this code for bugs"
+# → Hangs waiting for user input in CI
+
+# Non-interactive
+claude -p "Review this code for bugs"
+# → Processes prompt, outputs result, exits
+```
+
+**Use in CI:**
+```yaml
+# GitHub Actions example
+- name: Code Review with Claude
+  run: claude -p "Review for security issues" < pr_diff.txt
+```
+
+**Key behavior:**
+- `-p` flag makes Claude exit after producing output
+- No prompts for permission (uses settings.json allow/deny)
+- Output goes to stdout (can pipe to files or tools)
+- Exit code indicates success/failure
+
+#### --output-format json
+
+Produce structured JSON output for programmatic parsing:
+
+```bash
+# Default: prose output
+claude -p "List all functions in this file"
+# Output: "I found the following functions: function1(), function2()..."
+
+# JSON output
+claude -p --output-format json "List all functions in this file"
+# Output: {"functions": ["function1", "function2"], "count": 2}
+```
+
+**Use in CI for parsing:**
+```bash
+result=$(claude -p --output-format json "Analyze this code")
+num_issues=$(echo "$result" | jq '.issues | length')
+echo "Found $num_issues issues"
+```
+
+#### --json-schema
+
+Enforce structured output with a JSON schema:
+
+```bash
+claude -p --output-format json --json-schema '{
+  "type": "object",
+  "properties": {
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "severity": {"type": "string", "enum": ["high", "medium", "low"]},
+          "message": {"type": "string"},
+          "line": {"type": "integer"}
+        }
+      }
+    }
+  }
+}' "Review this code: $(cat file.js)"
+```
+
+**Benefits:**
+- Guarantees valid JSON structure
+- Eliminates parsing errors
+- Can directly post findings to PR comments
+- Schema validation prevents hallucinated fields
+
+### CI/CD Integration Example
+
+```bash
+#!/bin/bash
+# ci_review.sh — automated code review in CI pipeline
+
+# 1. Run review in non-interactive mode with JSON output
+REVIEW_JSON=$(claude -p \
+  --output-format json \
+  --json-schema '{
+    "type": "object",
+    "properties": {
+      "findings": {
+        "type": "array",
+        "items": {
+          "severity": {"type": "string", "enum": ["high", "medium", "low"]},
+          "file": {"type": "string"},
+          "line": {"type": "integer"},
+          "issue": {"type": "string"},
+          "suggestion": {"type": "string"}
+        }
+      },
+      "pass": {"type": "boolean"}
+    }
+  }' \
+  "Review this PR for security issues. $(cat pr_files.txt)")
+
+# 2. Parse JSON and check for high-severity issues
+HIGH_SEVERITY=$(echo "$REVIEW_JSON" | jq '.findings[] | select(.severity=="high") | length')
+
+if [ "$HIGH_SEVERITY" -gt 0 ]; then
+  echo "❌ Found $HIGH_SEVERITY high-severity issues"
+  exit 1
+fi
+
+# 3. Output review findings as GitHub markdown
+echo "## Code Review" >> $GITHUB_STEP_SUMMARY
+echo "$REVIEW_JSON" | jq '.findings[] | "- [\(.severity)] \(.file):\(.line) - \(.issue)"' >> $GITHUB_STEP_SUMMARY
+
+exit 0
+```
+
+### Flag Combinations
+
+| Use Case | Flags |
+|----------|-------|
+| Interactive dev work | (none) |
+| CI review with exit code | `-p` |
+| CI with JSON parsing | `-p --output-format json` |
+| CI with validated structure | `-p --output-format json --json-schema '...'` |
+| Pipeline test generation | `-p --output-format json --json-schema test_schema.json` |
+| Automated extraction | `-p --output-format json` (with few-shot examples in prompt) |
 
 ---
 
@@ -412,4 +545,21 @@ ALWAYS DENY
 • Bash(git reset --hard *)
 • Write(.env*), Write(*.key), Write(*.pem)
 • Bash(npm publish *)
+
+CLI FLAGS FOR AUTOMATION
+━━━━━━━━━━━━━━━━━━━━━━
+-p / --print              Exit after output (non-interactive)
+--output-format json      Produce JSON instead of prose
+--json-schema '...'       Enforce schema validation
+-p --output-format json   Combined: non-interactive + structured output
+
+TYPICAL CI COMMAND
+━━━━━━━━━━━━━━━━━
+claude -p --output-format json --json-schema SCHEMA.json "TASK"
+
+ENVIRONMENT
+━━━━━━━━━━━
+CLAUDE_API_KEY            API key for authentication
+ANTHROPIC_API_KEY         Alternative env var for API key
+CLAUDE_CONFIG_DIR         ~/.claude by default
 ```

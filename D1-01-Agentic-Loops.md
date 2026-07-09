@@ -56,7 +56,7 @@ def run_agent(user_message, tools, system_prompt):
     
     while True:
         response = client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-4-6-20250514",
             max_tokens=4096,
             system=system_prompt,
             tools=tools,
@@ -132,7 +132,7 @@ def run_agent(user_message, tools, system_prompt, max_iterations=10):
     
     for iteration in range(max_iterations):
         response = client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-4-6-20250514",
             max_tokens=4096,
             system=system_prompt,
             tools=tools,
@@ -297,7 +297,7 @@ tools = [
 
 ```python
 with client.messages.stream(
-    model="claude-sonnet-4-6",
+    model="claude-sonnet-4-6-20250514",
     max_tokens=4096,
     tools=tools,
     messages=messages
@@ -312,7 +312,7 @@ with client.messages.stream(
 
 ```python
 response = client.messages.create(
-    model="claude-sonnet-4-6",
+    model="claude-sonnet-4-6-20250514",
     max_tokens=16000,
     thinking={
         "type": "enabled",
@@ -325,51 +325,6 @@ response = client.messages.create(
 - Thinking blocks appear in `response.content` with `type: "thinking"`
 - Improves reasoning quality for complex decisions
 - Budget controls cost vs. quality tradeoff
-
-### Tool Choice Parameter
-
-The `tool_choice` parameter controls how Claude interacts with available tools:
-
-```python
-# AUTO (default): Claude decides whether to use a tool or respond with text
-response = client.messages.create(
-    model="claude-sonnet-4-6",
-    max_tokens=4096,
-    tools=tools,
-    tool_choice={"type": "auto"},  # Default behavior
-    messages=messages
-)
-
-# ANY: Claude MUST use one of the available tools (no text-only response)
-response = client.messages.create(
-    model="claude-sonnet-4-6",
-    max_tokens=4096,
-    tools=tools,
-    tool_choice={"type": "any"},  # Forces tool use
-    messages=messages
-)
-
-# TOOL (specific): Claude MUST use the specified tool
-response = client.messages.create(
-    model="claude-sonnet-4-6",
-    max_tokens=4096,
-    tools=tools,
-    tool_choice={"type": "tool", "name": "get_weather"},  # Forces specific tool
-    messages=messages
-)
-```
-
-| `tool_choice` Type | Behavior | Use Case |
-|-------------------|----------|----------|
-| `auto` (default) | Claude decides freely | General agentic loops |
-| `any` | Must call some tool | Force action, prevent premature stopping |
-| `tool` (+ name) | Must call the named tool | Structured extraction, mandatory steps |
-
-**Key considerations:**
-- With `any` or `tool`, `stop_reason` will always be `"tool_use"` (Claude cannot produce a final text-only response)
-- Use `any` to prevent the agent from stopping prematurely when you know a tool call is required
-- Use `tool` for structured output extraction (e.g., forcing Claude to call a `format_response` tool)
-- In agentic loops, `auto` is typically used so the agent can naturally terminate
 
 ---
 
