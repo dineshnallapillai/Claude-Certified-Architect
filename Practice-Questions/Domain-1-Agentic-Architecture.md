@@ -260,67 +260,6 @@ D) Retry both failed agents before synthesizing anything
 
 ---
 
-### Q26 (NEW: Domain 1.3 - Subagent Invocation)
-You're building a research coordinator agent that delegates to web search and document analysis sub-agents. The coordinator agent definition is:
-```
-{
-  "name": "coordinator",
-  "allowedTools": ["Grep", "Read", "Write"]
-}
-```
-When you try to spawn sub-agents via the Task tool, it fails. What is the issue?
-
-A) The coordinator needs higher permissions in the system settings  
-B) The allowedTools array is missing "Task" — sub-agent spawning requires explicit permission  
-C) The Task tool is only available to Opus models, not Sonnet  
-D) Sub-agents can only be spawned via hooks, not direct tool calls  
-
----
-
-### Q27 (NEW: Domain 1.3 - Context Passing)
-You spawn a synthesis sub-agent with the prompt: "Synthesize these findings: [empty]". The sub-agent returns "No findings to synthesize." What went wrong?
-
-A) The sub-agent's system prompt is misconfigured  
-B) You didn't explicitly pass the prior research results to the sub-agent's prompt—it doesn't automatically inherit coordinator context  
-C) The research sub-agents failed internally  
-D) The synthesis sub-agent needs higher priority in the orchestration queue  
-
----
-
-### Q28 (NEW: Domain 1.3 - Parallel Spawning)
-A coordinator needs to spawn 3 research sub-agents in parallel to search different topics. Which approach is MOST efficient?
-
-A) Loop through the 3 topics and spawn sub-agents sequentially  
-B) Emit 3 separate Task tool calls in the same coordinator response  
-C) Create 3 separate coordinator sessions, one per sub-agent  
-D) Use a PreToolUse hook to batch the spawn requests  
-
----
-
-### Q29 (NEW: Domain 1.7 - Session Resumption)
-You create a named session for codebase analysis: `claude --session "legacy-refactor" "Analyze this codebase"`. Hours later, the developer resumes: `claude --resume legacy-refactor "Check if X pattern exists"`. The agent gives inconsistent answers, referencing code that was already deleted. What happened?
-
-A) The session cache corrupted between resumptions  
-B) You didn't inform the resumed session that the codebase changed—prior tool results are now stale  
-C) Sessions can only be resumed within 10 minutes  
-D) The Explore sub-agent interfered with session state  
-
----
-
-### Q30 (NEW: Domain 1.7 - fork_session)
-You're evaluating two refactoring strategies for a monolithic app. You create a shared analysis session, then fork two branches to explore:
-- Fork A: "Propose strategy 1 (strangler pattern)"
-- Fork B: "Propose strategy 2 (complete rewrite)"
-
-The forks should NOT see each other's reasoning. What is the PRIMARY reason?
-
-A) To prevent resource contention between sessions  
-B) To allow independent exploration without one approach influencing the other; comparison happens in the main session only  
-C) To reduce token consumption by not duplicating analysis  
-D) To isolate secrets and permissions per fork  
-
----
-
 ---
 
 ## Answers
@@ -399,18 +338,3 @@ Prompt caching on the system prompt. If 60% of $50/day = $30/day is system promp
 
 ### A25: **C**
 The best synthesis acknowledges what's available and what's missing: "Based on results from agents A and B: [synthesis]. Note: Agent C timed out (data source X unavailable) and Agent D encountered a permission error (database Y inaccessible). The synthesis may be incomplete in areas X and Y. Recommended: retry or proceed with partial information."
-
-### A26: **B**
-The Task tool is how agents spawn sub-agents, but it must be explicitly allowed. The coordinator's allowedTools needs to include "Task": `{"allowedTools": ["Task", "Grep", "Read", "Write"]}`. Without it, the coordinator cannot invoke the Task tool, regardless of model or other permissions.
-
-### A27: **B**
-Sub-agents operate in isolated context — they don't automatically see the coordinator's prior research results, conversation history, or variable state. The orchestrator must explicitly include all relevant context in the prompt passed to the sub-agent. This is a fundamental principle of multi-agent isolation (prevents context leaks and focuses each agent on its role).
-
-### A28: **B**
-Emitting 3 Task tool calls in a single response spawns all 3 in parallel. Latency = max time of slowest agent, not sum of all. Sequential (A) takes 3× longer. Separate sessions (C) add management overhead. Hooks (D) don't handle orchestration; they're for validation.
-
-### A29: **B**
-Sessions persist message history and tool results. When you resume a session but the underlying codebase has changed, prior tool results (file contents, dependencies) are now stale. The agent may reference code that's been deleted or refactored. Fix: inform the resumed session "I've updated X files since we last worked" so Claude knows to re-verify assumptions.
-
-### A30: **B**
-The purpose of fork_session is to explore divergent approaches **independently** without one branch's reasoning influencing the other. This allows truly independent analysis that can then be compared in the main session without cross-contamination. If forks could see each other, one approach might anchor or bias the other, defeating the purpose of parallel exploration.

@@ -94,7 +94,7 @@ D) Claude ignores the system prompt for off-topic requests
 Few-shot examples in the system prompt consume 2,000 tokens. With prompt caching enabled, what is the cost impact over 20 iterations vs. without caching?
 
 A) No difference — examples are always charged fully  
-B) Without: 40,000 tokens at full price; With: 2,000 full + 18 × 200 = 5,600 effective (86% savings)  
+B) Without: 40,000 tokens at full price; With: 2,000 full + 19 × 200 = 5,800 effective (~85% savings)  
 C) Caching only works for tool definitions, not examples  
 D) Examples can't be cached because they change per session  
 
@@ -201,11 +201,11 @@ D) It depends on the model used
 ---
 
 ### Q20
-Prompt caching requires content to be at least 1024 tokens. Your system prompt is 800 tokens. How do you enable caching?
+Prompt caching requires a minimum token threshold (varies by model: 1024–4096 tokens). Your system prompt is 800 tokens and falls below the minimum. How do you enable caching?
 
 A) You can't — it's below the minimum  
-B) Pad the prompt to 1024 tokens with whitespace  
-C) Combine the system prompt with tool definitions or few-shot examples to exceed 1024 tokens in the cached block  
+B) Pad the prompt to the minimum with whitespace  
+C) Combine the system prompt with tool definitions or few-shot examples to exceed the minimum in the cached block  
 D) Use multiple smaller cached blocks  
 
 ---
@@ -260,70 +260,6 @@ D) Split into 5 calls of 20 pages each with no synthesis
 
 ---
 
-### Q26 (NEW: Domain 4.6 - Multi-Instance Review)
-You review code in the same session where you generated it. The generator's reasoning is in the conversation history. You notice the reviewer misses bugs the generator introduced. Why?
-
-A) The reviewer is using a weaker model  
-B) The reviewer retains the generator's reasoning context, causing bias toward justifying the design  
-C) The generated code is correct, but the review prompt is flawed  
-D) The reviewer doesn't have access to the test suite  
-
----
-
-### Q27 (NEW: Domain 4.6 - Independent Review Instance)
-To fix the issue from Q26, you deploy an independent review instance that:
-- Receives ONLY the code and tests (no generation reasoning)
-- Uses a fresh session
-- Has no knowledge of generator's intent
-
-Compared to same-session self-review, this catches approximately ___% more bugs?
-
-A) 5-10%  
-B) 15-20%  
-C) 30-40%  
-D) 50-60%  
-
----
-
-### Q28 (NEW: Domain 4.6 - Multi-Pass Review)
-Your PR modifies 14 files across a module. A single-pass review produces: detailed feedback on files 1-3, superficial feedback on files 4-10, obvious bugs missed in files 11-14. What's the root cause?
-
-A) Claude is lazy on later files  
-B) Attention dilution: processing many files in one pass causes focus degradation  
-C) The files are getting smaller so fewer issues to find  
-D) The prompt wasn't specific enough for bug finding  
-
----
-
-### Q29 (NEW: Domain 4.6 - Multi-Pass Solution)
-To fix attention dilution, you restructure the review into:
-- **Pass 1:** Analyze each file independently (per-file local issues)
-- **Pass 2:** Analyze cross-file interactions (integration-level issues)
-
-What is the coverage improvement and cost tradeoff?
-
-A) 10% more coverage, 1.1× cost  
-B) 25% more coverage, 1.5-2× cost  
-C) 50% more coverage, 2-3× cost  
-D) 90% more coverage, 5× cost  
-
----
-
-### Q30 (NEW: Domain 4.6 - Confidence-Based Routing)
-Your review finds 30 issues with these confidence scores:
-- 10 issues at 0.95 confidence
-- 12 issues at 0.70 confidence
-- 8 issues at 0.45 confidence
-
-Your developers dismiss 40% of 0.45 findings but only 5% of 0.95 findings. What should you do?
-
-A) Disable all low-confidence findings to reduce noise  
-B) Route high-confidence to auto-comment, low-confidence to human review; analyze dismissal patterns  
-C) Retrain the review prompt on the dismissed findings  
-D) Switch to a higher-tier model for higher accuracy  
-
----
-
 ---
 
 ## Answers
@@ -353,7 +289,7 @@ Batches API (50% discount) + Haiku (cheapest model, sufficient for classificatio
 Overly narrow role definitions limit Claude's ability to help with adjacent tasks. If the agent may encounter multiple languages, the system prompt should define broader capabilities: "You are a senior software engineer with expertise in Python, Go, and TypeScript."
 
 ### A9: **B**
-With prompt caching: first call = 2,000 tokens at full price + 25% write premium. Next 19 calls: 2,000 × 0.1 = 200 tokens effective cost each. Total: ~5,600 effective tokens vs. 40,000 without caching. 86% savings on the example portion.
+With prompt caching: first call = 2,000 tokens at full price + 25% write premium. Next 19 calls: 2,000 × 0.1 = 200 tokens effective cost each. Total: ~5,800 effective tokens vs. 40,000 without caching (~85% savings on the example portion).
 
 ### A10: **B**
 Multi-stage validation runs cheapest/fastest checks first. A syntax error is caught instantly (no need to wait 30s for tests). Only if syntax passes → check types (1s) → if passes → lint (3s) → if passes → tests (30s). This minimizes time and cost per retry iteration.
@@ -402,18 +338,3 @@ When criteria and examples conflict, Claude tends to pattern-match examples more
 
 ### A25: **B**
 Map-reduce: split the PDF into manageable chunks, process each independently (MAP phase using a cheaper model for extraction/summarization), then combine all section summaries into a final synthesis (REDUCE phase with a more capable model). This stays within context limits and is cost-efficient.
-
-### A26: **B**
-The reviewer has full access to the generator's conversation, including reasoning like "I designed it this way because X" or "I chose this approach because it's faster." This reasoning context biases the reviewer toward justifying the design rather than questioning it critically. Independent reviewers (without this context) catch issues the generator missed.
-
-### A27: **C**
-Research shows independent review instances catch 30-40% more subtle bugs than same-session self-review. This is because they lack the generator's reasoning bias and have a "fresh eyes" perspective. Multi-instance review is significantly more effective than self-review.
-
-### A28: **B**
-This is attention dilution. With 14 files in one pass, Claude's focus gradually degrades — early files get full attention (detailed feedback), later files receive declining attention (obvious bugs missed). This is a documented phenomenon in large-context processing.
-
-### A29: **B**
-Multi-pass review (per-file local + integration analysis) provides 20-25% more coverage (attention is now focused) at 1.5-2× cost (2 separate reviews). This is the recommended strategy for complex PRs: focused analysis is better than diluted analysis.
-
-### A30: **B**
-The high dismissal rate on 0.45 findings suggests these are high false positives. Route by confidence: auto-comment 0.95+ (high certainty), human review 0.70-0.95 (medium), suppress <0.70 (likely noise). Analyze which categories are dismissed most frequently to improve future reviews. This is calibration-based routing.
