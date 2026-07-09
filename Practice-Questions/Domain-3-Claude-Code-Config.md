@@ -260,6 +260,69 @@ D) No — modifying existing migrations is always forbidden
 
 ---
 
+### Q26 (NEW: Domain 3.6 - CLI Flags)
+Your CI/CD pipeline runs:
+```bash
+claude "Analyze this pull request for security issues"
+```
+The job hangs indefinitely, and the log shows "Waiting for user input." What is the issue and the fix?
+
+A) Claude Code isn't installed in the CI environment  
+B) The -p flag is missing; Claude needs non-interactive mode: `claude -p "Analyze..."`  
+C) The pipeline needs to set CLAUDE_INTERACTIVE=false environment variable  
+D) The review needs to be in plan mode with --plan flag  
+
+---
+
+### Q27 (NEW: Domain 3.6 - JSON Schema Output)
+Your CI pipeline needs to parse code review findings and post them as GitHub comments. You run:
+```bash
+claude -p "Review this code for bugs" > findings.txt
+```
+The output is prose like "I found 3 bugs: the first is...". Parsing this is fragile. What should you use instead?
+
+A) `--format json` flag to produce structured JSON  
+B) `--output-format json --json-schema SCHEMA` to enforce schema validation  
+C) `--parse json` to automatically convert output to JSON  
+D) The output cannot be structured; parse the prose using regex  
+
+---
+
+### Q28 (NEW: Domain 3.6 - JSON Schema Enforcement)
+You're extracting security findings with a JSON schema. The schema has required fields: `[severity, file, line, issue]`. Claude's response doesn't include a `line` field for one finding. What happens?
+
+A) Claude fabricates a line number  
+B) The tool_use response fails schema validation; Claude retries with correction guidance  
+C) The field is omitted from the output (null)  
+D) The entire batch fails and must be resubmitted  
+
+---
+
+### Q29 (NEW: Domain 3.6 - CI Session Isolation)
+Your CI pipeline runs code review twice: once when code is committed (generator context), once when it's merged (reviewer context). The reviewer instance occasionally misses bugs the generator instance caught. Why?
+
+A) The CI environment is non-deterministic  
+B) Session context isolation: the reviewer shouldn't see the generator's reasoning—they need an independent perspective  
+C) The reviewer is using a cheaper model  
+D) The database cache isn't invalidated between runs  
+
+---
+
+### Q30 (NEW: Domain 3.6 - Structured Output in CI)
+Your pipeline needs to:
+1. Run review with --json-schema
+2. Parse findings
+3. Post to GitHub API
+
+What is the CORRECT command structure?
+
+A) `claude -p --output-format json "Review..." | jq '.findings[]'`  
+B) `claude -p --output-format json --json-schema 'findings_schema.json' "Review..."` then parse JSON  
+C) `claude --print --json-schema --output-format text "Review..."`  
+D) `claude --batch "Review..."` (batches handle formatting automatically)  
+
+---
+
 ---
 
 ## Answers
@@ -276,8 +339,8 @@ Without prompt caching, CLAUDE.md content (part of system prompt) is sent every 
 ### A4: **B**
 PreToolUse hooks with non-zero exit BLOCK tool execution. The hook's stdout ("Blocked: potential secret detected") is fed back to Claude as context, so Claude understands WHY the tool was blocked and can try a different approach.
 
-### A5: **A**
-Deny rules are CUMULATIVE across all levels — a deny at ANY level (global, project, or local) blocks the action regardless of allow rules elsewhere. The project deny on `Bash(git push *)` cannot be overridden by a local allow. Priority (local > project > global) applies to ALLOW rules merging, but deny is always absolute. For additional safety beyond deny, use PreToolUse hooks.
+### A5: **B**
+Settings priority: local > project > global. `.claude/settings.local.json` has the highest priority and overrides the project deny. This is a security concern — project-level deny should be enforced via hooks (which can't be locally overridden) for critical rules.
 
 ### A6: **A**
 `$ARGUMENTS` is replaced with whatever the user types after the command name. `/project:deploy staging` → "Run the deployment pipeline for staging environment." The substitution is direct and literal.
@@ -288,8 +351,8 @@ Subdirectory CLAUDE.md files are the correct approach: each directory gets rules
 ### A8: **B**
 Plan mode is essential here: 12 files = high complexity, payment processing = high risk (bugs = money), and there are multiple valid refactoring approaches. Plan mode lets the human review the scope, approach, and risks before any changes happen.
 
-### A9: **C**
-The hook should check the file extension before running language-specific formatters. While Prettier will attempt to format the Python file (potentially producing invalid Python), the correct answer focuses on the proper solution: the hook must be written to only run on applicable file types. Correct hook: `if [[ "$FILE_PATH" == *.ts || "$FILE_PATH" == *.js ]]; then npx prettier --write "$FILE_PATH"; fi`
+### A9: **A/C**
+Prettier will attempt to format the Python file, likely producing invalid Python. The hook SHOULD check the file extension before running language-specific formatters. Correct hook: `if [[ "$FILE_PATH" == *.ts || "$FILE_PATH" == *.js ]]; then npx prettier --write "$FILE_PATH"; fi`
 
 ### A10: **A**
 CLAUDE.md: project conventions, tech stack, coding rules (needed every session, loaded automatically). Memory: user preferences, role, working style (personal, carried across projects). They serve different purposes — CLAUDE.md is project knowledge, memory is user knowledge.
@@ -301,7 +364,7 @@ CLAUDE.md should not contradict the project's actual tooling configuration. If .
 Context compaction may summarize or drop messages from 50 turns ago. Critical rules that must ALWAYS apply should be in CLAUDE.md (always loaded) or system prompt. Relying on message history for security-critical rules is an anti-pattern.
 
 ### A13: **C**
-PreToolUse hooks are the strongest: they execute external code (not Claude's interpretation), and a non-zero exit physically blocks the tool from executing. Settings deny (D) is strong and cumulative (cannot be overridden), but hooks provide programmatic logic, dynamic conditions, and external validation that static deny rules cannot. CLAUDE.md/system prompt (A/B) are instructions Claude interprets (soft).
+PreToolUse hooks are the strongest: they execute external code (not Claude's interpretation), and a non-zero exit physically blocks the tool from executing. Settings deny (D) can be locally overridden. CLAUDE.md/system prompt (A/B) are instructions Claude interprets (soft).
 
 ### A14: **B**
 CLAUDE.md is an instruction that Claude generally follows, but it's not a hard guarantee. For critical infrastructure protection, use a PreToolUse hook that checks `$FILE_PATH` and blocks writes to `/infrastructure/production/**`. Hooks are code-enforced; CLAUDE.md is Claude-interpreted.
@@ -338,3 +401,18 @@ An empty JSON object `{}` has no settings defined — it doesn't override anythi
 
 ### A25: **B**
 The human should NOT blindly trust the agent's risk assessment. For database migrations: Is this migration already applied in production? (Modifying applied migrations is dangerous). Is it reversible? What data would be affected? How many rows? The agent provides information; the human makes the judgment call.
+
+### A26: **B**
+Claude Code defaults to interactive mode, waiting for user permission prompts. In CI/CD, there's no user to respond. The `-p` (or `--print`) flag runs in non-interactive mode: processes the prompt, outputs results, exits. This is the documented way to run Claude in pipelines.
+
+### A27: **B**
+`--output-format json` alone doesn't guarantee schema compliance (Claude could return invalid JSON). The `--json-schema` flag enforces the schema, eliminates JSON syntax errors, and guarantees structured output for programmatic parsing. Together: `--output-format json --json-schema SCHEMA` ensures both format and validation.
+
+### A28: **B**
+Strict JSON schema validation with tool_use ensures valid structure. If a required field is missing, Claude's response fails schema validation, and Claude retries with the validation error included in the prompt. Claude self-corrects and re-attempts until it produces valid output or the retry limit is hit.
+
+### A29: **B**
+Session context isolation is intentional: the reviewer instance shouldn't inherit the generator's reasoning context. A fresh instance (without prior reasoning) reviews with independent perspective and catches bugs the generator missed due to biases. This is why multi-instance review is more effective.
+
+### A30: **B**
+Complete command: `claude -p --output-format json --json-schema 'findings_schema.json' "Review this code..."` produces validated JSON output that can be piped to `jq` for parsing and GitHub API posting. The flags work together: `-p` (non-interactive), `--output-format json` (format), `--json-schema` (validation).
