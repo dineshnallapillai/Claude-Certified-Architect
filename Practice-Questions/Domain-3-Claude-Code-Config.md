@@ -323,6 +323,44 @@ D) `claude --batch "Review..."` (batches handle formatting automatically)
 
 ---
 
+### Q31 (NEW: Domain 3.1 - @import Syntax)
+Your project has a monolithic `CLAUDE.md` file (3500 tokens). You want to split it into modular files:
+```
+./CLAUDE.md
+./.claude/rules/api-conventions.md
+./.claude/rules/database-rules.md
+./.claude/rules/testing-standards.md
+```
+
+What is the CORRECT way to import these into the root CLAUDE.md?
+
+A) `@import .claude/rules/` (import entire directory)  
+B) `@include .claude/rules/api-conventions.md` (use @include instead)  
+C) `@import .claude/rules/api-conventions.md` (import each file separately)  
+D) Create CLAUDE.md files in each subdirectory instead  
+
+---
+
+### Q32 (NEW: Domain 3.1 - @import Organization)
+You have three modules (api/, database/, frontend/), each with distinct conventions. You want Claude to load only relevant conventions per module. What's the BEST structure?
+
+A) Root CLAUDE.md with all 3 @imports; let Claude filter by context  
+B) Root CLAUDE.md imports core standards; each module's CLAUDE.md imports module-specific rules  
+C) Create separate projects for each module  
+D) Put all conventions in one giant file; @import is overkill  
+
+---
+
+### Q33 (NEW: Domain 3.1 - @import Limitations)
+Your @import chain: `A.md` imports `B.md`, which imports `C.md`. What happens?
+
+A) All three files are merged successfully  
+B) Circular dependency error or undefined behavior (recursive imports not allowed)  
+C) Only A.md and B.md are loaded; C.md is skipped  
+D) The system automatically detects and flattens the chain  
+
+---
+
 ---
 
 ## Answers
@@ -416,3 +454,12 @@ Session context isolation is intentional: the reviewer instance shouldn't inheri
 
 ### A30: **B**
 Complete command: `claude -p --output-format json --json-schema 'findings_schema.json' "Review this code..."` produces validated JSON output that can be piped to `jq` for parsing and GitHub API posting. The flags work together: `-p` (non-interactive), `--output-format json` (format), `--json-schema` (validation).
+
+### A31: **C**
+Use `@import .claude/rules/api-conventions.md` (and repeat for each file). @import does NOT support directory-level imports—you must specify individual files. Each @import line is resolved relative to the current CLAUDE.md file, and contents are merged inline.
+
+### A32: **B**
+Root CLAUDE.md imports core standards (universal conventions). Each module's CLAUDE.md imports **module-specific** @import files. This way, when Claude works in /api/, it loads: universal + API-specific. When in /database/, it loads: universal + database-specific. Selective loading is efficient.
+
+### A33: **B**
+Recursive/circular imports are NOT allowed in @import. If A imports B and B imports A (or the chain cycles), Claude Code returns an error or exhibits undefined behavior. Avoid: chained imports (A → B → C). Instead: all files import from a shared standards directory or use flat structure.
