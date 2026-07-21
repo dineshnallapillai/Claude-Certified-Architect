@@ -1,10 +1,11 @@
 # Claude Certified Architect — Exam Day Cheat Sheet
 
 > Last-minute review of the most testable facts. Read this the night before and morning of the exam.
+> **Exam:** 60 questions, 120 minutes, 720/1000 to pass, 4 of 6 scenarios, no guessing penalty.
 
 ---
 
-## Domain 1: Agentic Architecture
+## Domain 1: Agentic Architecture (27% weight — highest)
 
 ### Agentic Loop
 ```
@@ -13,56 +14,113 @@ User Input → Claude (reason) → tool_use → Execute Tool → tool_result →
 - **Stop reasons:** `end_turn`, `tool_use`, `max_tokens`, `stop_sequence`, `pause_turn`, `refusal`
 - Loop continues while `stop_reason == "tool_use"`
 - `tool_result` must include matching `tool_use_id`
+- `tool_result` goes in the **user** role (NOT assistant or system)
+- Multiple parallel tool results → ONE user message with multiple tool_result blocks
+- `stop_reason` is the ONLY reliable loop control signal — NEVER parse text for "I'm done"
 
 ### tool_choice Parameter
 | Value | Behavior |
 |-------|----------|
 | `auto` (default) | Claude decides whether to use tools |
-| `any` | Forces Claude to use a tool (any tool) |
-| `{"type": "tool", "name": "X"}` | Forces a specific tool |
+| `any` | Forces Claude to use A tool (Claude picks which — but MUST use one) |
+| `{"type": "tool", "name": "X"}` | Forces a specific named tool (100% structural compliance) |
 | `none` | Claude cannot use tools |
 | `disable_parallel_tool_use: true` | Prevents multiple tools in one response (add to any above) |
 
-### Multi-Agent Topologies
-| Topology | Use When |
-|----------|----------|
-| **Hub-and-spoke** | Independent tasks, need parallel execution + aggregation |
-| **Pipeline** | Sequential stages, each transforms output for next |
-| **Parallel** | Same task, different perspectives (voting/consensus) |
+- `any` ≠ "Claude picks best tool" — it FORCES tool use even if no tool is appropriate
+- Forced specific tool = guaranteed JSON output matching schema (use for structured output)
 
-- Context isolation: sub-agents get ONLY what they need, never full parent context
-- Model selection: Haiku=triage/routing, Sonnet=general work, Opus=complex reasoning
+### Multi-Agent Topologies
+| Topology | Use When | Communication |
+|----------|----------|---------------|
+| **Hub-and-spoke** | Independent tasks, parallel execution + aggregation | All routes through coordinator |
+| **Pipeline** | Sequential stages, each transforms output for next | Linear, A→B→C |
+| **Parallel (voting)** | Same task, different perspectives, consensus | Independent, results merged |
+| **Hierarchical** | Complex decomposition, specialist teams | Manager → team leads → workers |
+
+- **Context isolation:** Sub-agents inherit NOTHING — no conversation, no CLAUDE.md, no tools, no state
+- Coordinator must EXPLICITLY serialize all needed context into subagent prompt
+- **Model tiering:** Haiku=routing/classification, Sonnet=general work, Opus=complex reasoning
+- Sub-agents CANNOT communicate directly with each other (hub-and-spoke = coordinator mediates)
 
 ### Hooks (Critical - frequently tested)
 - Hooks receive data via **STDIN as JSON** (NOT environment variables)
 - JSON contains: `tool_name`, `tool_input`, `session_id`, `transcript_path`
 - **PreToolUse**: exit 0=allow, exit 2=block, stdout=feedback to Claude
-- **PostToolUse**: runs after tool execution, cannot block
+- **PostToolUse**: runs after tool execution, CANNOT block (tool already ran)
+- **Stop**: runs after agent finishes — for linting, cleanup, notifications
+- **Notification**: when Claude sends notification — custom routing
 - Hooks are **synchronous** — agent waits for completion
-- Enforcement strength: **Hooks > Settings > CLAUDE.md**
+- Enforcement strength: **Hooks > Settings > CLAUDE.md > Prompt instructions**
 
 ### Error Handling
-| HTTP Code | Meaning | Action |
-|-----------|---------|--------|
-| 400 | Invalid request / context too long | Fix request, don't retry |
-| 401 | Invalid API key | Fix credentials |
-| 429 | Rate limited | Retry with backoff |
-| 529 | Overloaded (Anthropic-specific) | Retry with exponential backoff + jitter |
+| HTTP Code | Meaning | Action | Trap |
+|-----------|---------|--------|------|
+| 400 | Invalid request / context too long | Fix request, don't retry | Context overflow = 400, NOT 413 |
+| 401 | Invalid API key | Fix credentials | — |
+| 403 | Permission denied | Check access | — |
+| 413 | Payload too large (raw HTTP size) | Reduce payload | NOT token overflow |
+| 429 | Rate limited | Retry with exponential backoff | — |
+| 500 | Internal server error | Retry cautiously | — |
+| 529 | Overloaded (Anthropic-specific) | Retry with backoff + jitter | Unique to Anthropic |
 
 - Circuit breaker: track failures → open circuit → periodic test requests → close on recovery
 - `is_error: true` in tool_result tells Claude the tool failed (triggers self-correction)
+- WITHOUT `is_error: true`, error text may be treated as successful data ("Error: not found" → interpreted as content)
+
+### Escalation Design
+- Escalate on: policy gaps, exception required, customer requests human, agent cannot progress
+- DO NOT escalate based on: sentiment/frustration, self-reported confidence scores
+- Explicit criteria with few-shot examples > confidence thresholds > sentiment analysis
+- Sentiment ≠ complexity (angry customer may have trivial issue; calm customer may have complex one)
+
+### Task Decomposition Diagnosis
+When multi-agent output is incomplete:
+```
+Check Layer 1 FIRST: Did coordinator decompose correctly?
+  → Layer 2: Did each subagent receive correct context?
+    → Layer 3: Did subagents execute correctly?
+      → Layer 4: Was synthesis/combination correct?
+```
+Blame decomposition before blaming execution.
 
 ---
 
-## Domain 2: Tool Design & MCP
+## Domain 2: Tool Design & MCP (18% weight)
 
 ### Tool Definition Anatomy
 ```json
-{"name": "verb_noun", "description": "WHAT + WHEN + WHEN NOT + OUTPUT", "input_schema": {...}}
+{
+  "name": "verb_noun",
+  "description": "WHAT it does + WHEN to use + WHEN NOT to use + what it RETURNS + example inputs",
+  "input_schema": {
+    "type": "object",
+    "properties": {...},
+    "required": [...],
+    "additionalProperties": false
+  }
+}
 ```
-- Names: `snake_case`, verb_noun pattern
-- Descriptions: tell Claude WHEN to use AND when NOT to use
+- Names: `snake_case`, verb_noun pattern (`get_customer`, `process_refund`)
+- Descriptions are the PRIMARY mechanism for tool selection — fix these FIRST when selection fails
 - `additionalProperties: false` recommended for all schemas
+- Boundary clauses ("Use this INSTEAD OF X when...") prevent tool confusion
+
+### Tool Scoping & Degradation
+| Tools per Agent | Routing Accuracy | Action |
+|---|---|---|
+| 1-5 | ~95%+ (sweet spot) | Ideal for specialist agents |
+| 6-10 | ~85% | Acceptable with excellent descriptions |
+| 11-15 | ~70% | Split into specialists |
+| 16+ | ~60% (degradation cliff) | Architectural problem — restructure |
+
+- Accuracy drops ~8% per tool past 5
+- Fix priority: reduce tool count > improve descriptions > add examples > add router
+
+### 80/20 Tool Allocation Pattern
+- 85% of cases are simple → give agent a scoped lightweight tool
+- 15% of cases are complex → route through coordinator to specialist
+- Balance: latency reduction for common case + proper handling for rare case
 
 ### Tool Annotations (MCP)
 | Annotation | Default | Meaning |
@@ -76,12 +134,23 @@ User Input → Claude (reason) → tool_use → Execute Tool → tool_result →
 ```
 Host (Claude Desktop/Code) → Client (1:1 per server) → Server → [Tools, Resources, Prompts]
 ```
+- Client-Server relationship is 1:1 (one client per server)
+- Host can have MULTIPLE clients (connecting to different servers)
+
+### MCP Primitives — Who Controls What (CRITICAL)
+| Primitive | Controlled By | Purpose | Example |
+|-----------|---------------|---------|---------|
+| **Tools** | Model (Claude decides) | Actions Claude can invoke | `get_weather`, `send_email` |
+| **Resources** | Application (your code) | Data the app can read | `file://config.json`, database records |
+| **Prompts** | User (explicitly selected) | Pre-built templates | `/summarize`, `/translate` |
+
+**Trap:** Confusing control. Tools = model-initiated. Resources = app-initiated. Prompts = user-initiated.
 
 ### MCP Transports
 | Transport | Use Case | Status |
 |-----------|----------|--------|
 | **stdio** | Local servers, same machine | Recommended for local |
-| **Streamable HTTP** | Remote servers, single endpoint | Recommended for remote |
+| **Streamable HTTP** | Remote servers, single endpoint | **Recommended for remote (current)** |
 | HTTP+SSE | Remote servers | **Legacy (deprecated)** |
 
 ### MCP Initialization Handshake
@@ -90,16 +159,31 @@ Client → initialize (protocol version, capabilities) → Server
 Server → response (server capabilities, protocol version) → Client
 Client → notifications/initialized → Server
 ```
+- Three-step handshake BEFORE any tool/resource calls
+- Client sends protocol version + capabilities it supports
+- Server responds with its capabilities
+- Client confirms with initialized notification
 
 ### MCP Notifications
 - `notifications/progress` — progress reporting (progressToken, progress, total)
 - `notifications/message` — log messages (level, logger, data)
-- `notifications/tools/list_changed` — dynamic tool availability changed
+- `notifications/tools/list_changed` — dynamic tool availability changed (client should re-fetch)
+- `notifications/resources/updated` — resource content changed
 
-### Error Responses
-- Set `is_error: true` for tool failures (helps Claude self-correct)
-- Include error `type`, `message`, `retryable` flag
-- NEVER expose stack traces, internal paths, or credentials in error messages
+### Structured Error Responses
+```json
+{
+  "type": "tool_result",
+  "tool_use_id": "toolu_xxx",
+  "is_error": true,
+  "content": [{"type": "text", "text": "{\"error_code\": \"TIMEOUT\", \"message\": \"Device unreachable\", \"retryable\": true, \"suggested_action\": \"check_connectivity\"}"}]
+}
+```
+- `is_error: true` — REQUIRED for failures (without it, error text = successful data)
+- Include: error type, what was attempted, retryable flag, suggested recovery
+- Return partial results when available (don't throw away progress)
+- NEVER expose stack traces, internal paths, or credentials
+- Structured errors enable intelligent coordinator recovery decisions
 
 ---
 
